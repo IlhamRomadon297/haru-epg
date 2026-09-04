@@ -1,11 +1,14 @@
 ---
-// Navigasi ganti hari: panah Kemarin/Besok + tombol Hari ini + date picker.
-// Props: date (YYYY-MM-DD), makeUrl(tanggal) => string.
+// Strip navigasi tanggal: H-3 s/d H+7 dari HARI INI.
+// Label relatif untuk Kemarin / Hari Ini / Besok / Lusa, selebihnya tanggal.
+// Props: date (YYYY-MM-DD yang sedang dilihat), makeUrl(tanggal) => string.
 interface Props {
   date: string;
   makeUrl: (d: string) => string;
 }
 const { date, makeUrl } = Astro.props;
+
+const OFFSETS = [-3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
 function shift(dateISO: string, days: number): string {
   const d = new Date(`${dateISO}T12:00:00+07:00`).getTime() + days * 86400000;
@@ -16,23 +19,47 @@ function todayWIB(): string {
   const n = Date.now();
   return new Date(n + (7 * 60 + new Date(n).getTimezoneOffset()) * 60000).toISOString().slice(0, 10);
 }
-const prev = shift(date, -1);
-const next = shift(date, 1);
 const today = todayWIB();
 
-function shortLabel(dateISO: string): string {
-  const d = new Date(`${dateISO}T12:00:00+07:00`);
-  const s = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(d);
-  if (dateISO === today) return `Hari ini · ${s}`;
-  return s;
+function relLabel(off: number): string | null {
+  if (off === -1) return 'Kemarin';
+  if (off === 0) return 'Hari Ini';
+  if (off === 1) return 'Besok';
+  if (off === 2) return 'Lusa';
+  return null;
+}
+function dayName(dateISO: string): string {
+  return new Intl.DateTimeFormat('id-ID', { weekday: 'short', timeZone: 'Asia/Jakarta' }).format(
+    new Date(`${dateISO}T12:00:00+07:00`),
+  );
+}
+function dayNum(dateISO: string): string {
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(
+    new Date(`${dateISO}T12:00:00+07:00`),
+  );
 }
 ---
-<div class="datenav">
-  <a class="btn" href={makeUrl(prev)} title="Hari sebelumnya">◀ {shortLabel(prev).split(' · ')[0]}</a>
-  {date !== today && <a class="btn primary" href={makeUrl(today)}>● Hari ini</a>}
-  <a class="btn" href={makeUrl(next)} title="Hari berikutnya">{shortLabel(next).split(' · ')[0]} ▶</a>
-  <form method="get" class="datenav-pick" id="datenav-form">
-    <input type="date" name="date" value={date} min="2026-08-01" max="2030-12-31" onchange="this.form.submit()" title="Pilih tanggal" />
+<div class="datestrip-wrap">
+  <div class="datestrip" role="navigation" aria-label="Pilih tanggal">
+    {OFFSETS.map((off) => {
+      const d = shift(today, off);
+      const rel = relLabel(off);
+      const active = d === date;
+      return (
+        <a
+          class={`dchip ${active ? 'active' : ''} ${off === 0 ? 'istoday' : ''}`}
+          href={makeUrl(d)}
+          aria-current={active ? 'date' : undefined}
+          title={d}
+        >
+          <span class="d-top">{rel ?? dayName(d)}</span>
+          <span class="d-sub">{dayNum(d)}</span>
+        </a>
+      );
+    })}
+  </div>
+  <form method="get" class="datenav-pick" id="datenav-form" title="Lompat ke tanggal lain">
+    <input type="date" name="date" value={date} min="2026-08-01" max="2030-12-31" onchange="this.form.submit()" aria-label="Pilih tanggal lain" />
   </form>
 </div>
 <script is:inline>

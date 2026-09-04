@@ -137,11 +137,34 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
       .chip { text-decoration: none; font-size: 0.8rem; font-weight: 700; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
       .chip.active, .chip:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
-      footer.site { margin: 34px 0 26px; color: var(--muted); font-size: 0.8rem; text-align: center; }
-      footer.site .src { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+      footer.site { margin: 34px 0 26px; display: flex; justify-content: center; }
+      footer.site .foot-card {
+        width: 100%; max-width: 720px; text-align: center;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+        box-shadow: var(--shadow); padding: 20px 18px 16px;
+      }
+      .foot-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 4px; }
+      .foot-brand img { width: 30px; height: 30px; }
+      .foot-brand strong { font-size: 1.02rem; letter-spacing: -0.01em; }
+      .foot-tag { color: var(--muted); font-size: 0.82rem; margin: 0 0 12px; }
+      footer.site .src { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
+      .foot-meta { color: var(--muted); font-size: 0.78rem; margin: 0; }
       .disclaimer { background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 14px; margin-top: 18px; font-size: 0.8rem; }
-      .datenav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
-      .datenav .btn { text-decoration: none; }
+      .datestrip-wrap { display: flex; gap: 10px; align-items: center; margin: 14px 0; }
+      .datestrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; flex: 1; scrollbar-width: thin; }
+      .dchip {
+        flex: 1 0 auto; min-width: 74px; text-decoration: none; text-align: center;
+        background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+        padding: 8px 6px; display: flex; flex-direction: column; gap: 1px;
+      }
+      .dchip:hover { border-color: var(--brand); }
+      .dchip .d-top { font-size: 0.78rem; font-weight: 800; }
+      .dchip .d-sub { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+      .dchip.istoday { border-color: var(--brand); }
+      .dchip.istoday .d-top { color: var(--brand); }
+      .dchip.active { background: var(--brand); border-color: var(--brand); }
+      .dchip.active .d-top, .dchip.active .d-sub { color: #fff; }
+      .datenav-pick { flex-shrink: 0; }
       .datenav-pick input[type='date'] { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; font-size: 0.85rem; }
       .detail { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: var(--shadow); }
       .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
@@ -186,11 +209,18 @@ const q = Astro.url.searchParams.get('q') ?? '';
       </div>
     </main>
     <footer class="site wrap">
-      <p><strong>Haru EPG</strong> — panduan acara TV Indonesia · diperbarui otomatis tiap 2 jam · <a href="/api/schedule">API JSON</a></p>
-      <div class="src">
-        <span class="pill light">tivie.id: 24 ch nasional</span>
-        <span class="pill light">MNC Vision: pay TV &amp; internasional</span>
-        <span class="pill light">Singtel TV: HBO · ANIPLUS · Animax</span>
+      <div class="foot-card">
+        <div class="foot-brand">
+          <img src="/logo.svg" alt="Haru EPG" width="30" height="30" />
+          <strong>Haru EPG</strong>
+        </div>
+        <p class="foot-tag">Panduan acara TV Indonesia — nasional, pay TV, dan internasional.</p>
+        <div class="src">
+          <span class="pill light">📡 tivie.id · 24 channel nasional</span>
+          <span class="pill light">🛰️ MNC Vision · pay TV &amp; internasional</span>
+          <span class="pill light">🌏 Singtel TV · HBO · ANIPLUS · Animax</span>
+        </div>
+        <p class="foot-meta">Diperbarui otomatis tiap 2 jam · <a href="/api/schedule">API JSON</a> · © 2026 Haru EPG</p>
       </div>
     </footer>
     <script is:inline>

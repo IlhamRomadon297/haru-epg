@@ -1,4 +1,4 @@
-import { CHANNELS, getChannel } from './channels';
+import { CHANNELS, byFeatured, getChannel } from './channels';
 import { getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
 import { readDayFromD1, writeDayToD1, type D1Db } from './store';
@@ -49,7 +49,7 @@ export function progress(nowMs: number, p: EpgProgram): number {
 const mem = new Map<string, { exp: number; data: DaySchedule }>();
 
 function cacheKey(kind: string, date: string): string {
-  return `https://haru-epg.internal/cache/v6/${kind}/${date}`;
+  return `https://haru-epg.internal/cache/v7/${kind}/${date}`;
 }
 
 function ttlSeconds(env: Env): number {
@@ -101,7 +101,7 @@ async function writeCache(key: string, data: DaySchedule, ttl: number): Promise<
 /** Bangun DaySchedule dari daftar program mentah (dipakai jalur D1 & live). */
 function buildDay(date: string, all: EpgProgram[], source: DaySchedule['source']): DaySchedule {
   const nowMs = Date.now();
-  const channels: ChannelSchedule[] = CHANNELS.map((c) => {
+  const channels: ChannelSchedule[] = [...CHANNELS].sort(byFeatured).map((c) => {
     const programs = all
       .filter((p) => p.channelSlug === c.slug && p.date === date)
       .sort((a, b) => a.start.localeCompare(b.start));

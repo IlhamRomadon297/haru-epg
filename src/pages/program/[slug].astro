@@ -39,7 +39,7 @@ const ch = prog ? getChannel(prog.channelSlug) : undefined;
           {live
             ? <span class="pill">🔴 LIVE SEKARANG</span>
             : <span class="pill">{Date.parse(prog.start) > nowMs ? '⏳ Akan tayang' : '✅ Sudah tayang'}</span>}
-          {prog.category && <span class="pill">{prog.category}</span>}
+          {prog.category && <span class="pill">{prog.category.charAt(0).toUpperCase() + prog.category.slice(1)}</span>}
           {prog.manual && <span class="pill">✏️ Data manual</span>}
         </div>
       </section>

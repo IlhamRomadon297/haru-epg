@@ -2,6 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import DateNav from '../../components/DateNav.astro';
 import { getChannelSchedule, isLive, progress, todayWIB } from '../../lib/epg';
+import { categoryLabel } from '../../lib/channels';
 
 export const prerender = false;
 
@@ -24,14 +25,14 @@ const nowMs = Date.now();
       <span class="avatar" style="width:58px;height:58px;background:rgba(255,255,255,.9)">{channel.name.slice(0, 2)}{channel.logo && <img src={channel.logo} alt={channel.name} onerror="this.remove()" />}</span>
       <div>
         <h1 style="margin:0">Jadwal {channel.name}</h1>
-        <p>{label} · {channel.programs.length} acara · {channel.category}</p>
+        <p>{label} · {channel.programs.length} acara · {categoryLabel(channel.category)}</p>
       </div>
     </div>
   </section>
 
   <DateNav date={date} makeUrl={(d) => `/channel/${channel.slug}?date=${d}`} />
   <div style="margin:-4px 0 14px">
-    <a class="btn" style="text-decoration:none" href={`/?kategori=${channel.category}`}>← {channel.category}</a>
+    <a class="btn" style="text-decoration:none" href={`/?kategori=${channel.category}`}>← {categoryLabel(channel.category)}</a>
   </div>
 
   {channel.programs.length === 0 ? (

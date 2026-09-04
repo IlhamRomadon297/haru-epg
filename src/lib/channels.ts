@@ -15,12 +15,17 @@ export interface Channel {
   providerRef?: string;
   logo?: string;
   description?: string;
+  /** true = selalu diurutkan paling atas (dipakai untuk Animax & ANIPLUS). */
+  featured?: boolean;
 }
 
 const logoBase = 'https://i0.wp.com/is3.cloudhost.id/tivie/channel/';
 const logo = (f: string) => `${logoBase}${f}?w=120&h=120`;
 
 export const CHANNELS: Channel[] = [
+  // Unggulan — selalu teratas di semua daftar
+  { slug: 'animax', name: 'Animax', category: 'paytv', provider: 'singtel', providerRef: '5342', logo: 'https://www.singtel.com/content/dam/singtel/online-draft/chlogos/CH%20342%20-%20ANIMAX.png', featured: true },
+  { slug: 'aniplus', name: 'ANIPLUS HD', category: 'paytv', provider: 'singtel', providerRef: '5340', logo: 'https://www.singtel.com/content/dam/singtel/online-draft/chlogos/CH%20340%20-%20ANIPLUS.png', featured: true },
   { slug: 'antv', name: 'ANTV', category: 'nasional', tivieSlug: 'antv', logo: logo('YcwYQyql9CXniHlugQEaKNt7SmUNA9C8wajaWluo.png') },
   { slug: 'btv', name: 'BTV', category: 'nasional', tivieSlug: 'btv', logo: logo('ouHjfljSaPJbIXiCDuWpueKhzwXsjZffnHCu2MPU.png') },
   { slug: 'cnn-indonesia', name: 'CNN Indonesia', category: 'nasional', tivieSlug: 'cnnindonesia', logo: logo('0kONuTn3l5nyiaXNzUD8PkcVJ3KzW77Rr0dVJXKl.png') },
@@ -51,8 +56,6 @@ export const CHANNELS: Channel[] = [
   { slug: 'hbo-signature', name: 'HBO Signature', category: 'paytv', provider: 'singtel', providerRef: '6421', logo: 'https://www.singtel.com/content/dam/singtel/personal/products-services/tv/channel/logo/CH%20421%20-%20hbo_SIG.PNG' },
   { slug: 'hbo-family', name: 'HBO Family', category: 'paytv', provider: 'singtel', providerRef: '6422', logo: 'https://www.singtel.com/content/dam/singtel/personal/products-services/tv/channel/logo/CH%20422%20-%20hbo_FAM.PNG' },
   { slug: 'hbo-hits', name: 'HBO Hits', category: 'paytv', provider: 'singtel', providerRef: '6423', logo: 'https://www.singtel.com/content/dam/singtel/personal/products-services/tv/channel/logo/CH%20423%20-%20hbo_HITS.PNG' },
-  { slug: 'aniplus', name: 'ANIPLUS HD', category: 'paytv', provider: 'singtel', providerRef: '5340', logo: 'https://www.singtel.com/content/dam/singtel/online-draft/chlogos/CH%20340%20-%20ANIPLUS.png' },
-  { slug: 'animax', name: 'Animax', category: 'paytv', provider: 'singtel', providerRef: '5342', logo: 'https://www.singtel.com/content/dam/singtel/online-draft/chlogos/CH%20342%20-%20ANIMAX.png' },
   { slug: 'bein-sports-1', name: 'beIN Sports 1', category: 'paytv', provider: 'mncvision', providerRef: '309', logo: 'https://www.mncvision.id/userfiles/image/channel/channel_309.png' },
   { slug: 'bein-sports-2', name: 'beIN Sports 2', category: 'paytv', provider: 'mncvision', providerRef: '310', logo: 'https://www.mncvision.id/userfiles/image/channel/channel_310.png' },
   { slug: 'bein-sports-3', name: 'beIN Sports 3', category: 'paytv', provider: 'mncvision', providerRef: '311', logo: 'https://www.mncvision.id/userfiles/image/channel/channel_311.png' },
@@ -95,6 +98,16 @@ export function getChannel(slug: string): Channel | undefined {
   return CHANNELS.find((c) => c.slug === slug || c.tivieSlug === slug);
 }
 
+/** Label rapi untuk kategori (Nasional / Pay TV / Internasional). */
+export function categoryLabel(cat: Category): string {
+  return cat === 'nasional' ? 'Nasional' : cat === 'paytv' ? 'Pay TV' : 'Internasional';
+}
+
+/** Komparator: channel featured (Animax & ANIPLUS) selalu di atas, sisanya ikut urutan daftar. */
+export function byFeatured(a: Channel, b: Channel): number {
+  return Number(b.featured ?? false) - Number(a.featured ?? false);
+}
+
 export function channelsByCategory(cat: Category): Channel[] {
-  return CHANNELS.filter((c) => c.category === cat);
+  return CHANNELS.filter((c) => c.category === cat).sort(byFeatured);
 }

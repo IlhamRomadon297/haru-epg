@@ -2,7 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import DateNav from '../components/DateNav.astro';
 import { getDaySchedule, isLive, progress, todayWIB } from '../lib/epg';
-import { CATEGORIES } from '../lib/channels';
+import { CATEGORIES, categoryLabel } from '../lib/channels';
 
 export const prerender = false;
 
@@ -62,7 +62,7 @@ const liveCount = channels.filter((c) => c.now).length;
               <span class="avatar">{ch.name.slice(0, 2)}{ch.logo && <img src={ch.logo} alt={ch.name} loading="lazy" onerror="this.remove()" />}</span>
               <div>
                 <h3><a href={`/channel/${ch.slug}?date=${day.date}`}>{ch.name}</a></h3>
-                <span class="sub">{ch.category} · {ch.programs.length} acara</span>
+                <span class="sub">{categoryLabel(ch.category)} · {ch.programs.length} acara</span>
               </div>
               <span style="flex:1"></span>
               {live && <span class="live-badge"><span class="live-dot"></span>LIVE</span>}
