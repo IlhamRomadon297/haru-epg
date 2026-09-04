@@ -62,7 +62,7 @@ function buildChannelMessage(date, ch) {
   }
 
   lines.push('');
-  lines.push(`<i>haru-epg.pages.dev</i>`);
+  lines.push(`<a href="https://haru-epg.pages.dev/channel/${ch.slug}">Jadwal Selengkapnya: haru-epg.pages.dev</a>`);
   return lines.join('\n');
 }
 
