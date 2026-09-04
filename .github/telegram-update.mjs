@@ -84,6 +84,7 @@ function sleep(ms) {
 }
 
 async function main() {
+  console.log('Config:', JSON.stringify({ chat_id: config.chat_id, channels: config.channels }));
   console.log('Fetching schedule...');
   const { date, data: schedule } = await fetchSchedule();
 
@@ -115,9 +116,9 @@ async function main() {
 
     if (result.ok) {
       sent++;
-      console.log(`  OK message_id=${result.result.message_id}`);
+      console.log(`  OK chat_id=${config.chat_id} message_id=${result.result.message_id} chat=${JSON.stringify(result.result.chat)}`);
     } else {
-      console.log(`  FAILED`);
+      console.log(`  FAILED: ${JSON.stringify(result)}`);
     }
 
     // Delay supaya ngga kena rate limit
