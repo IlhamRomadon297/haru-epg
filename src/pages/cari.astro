@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import DateNav from '../components/DateNav.astro';
 import { getDaySchedule, isLive, todayWIB } from '../lib/epg';
 
 export const prerender = false;
@@ -38,9 +39,11 @@ const nowMs = Date.now();
 
   <form class="toolbar" method="get" action="/cari">
     <input name="q" value={q} placeholder="cth: Ikatan Cinta / RCTI" style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:10px 16px;color:var(--text)" />
-    <input type="date" name="date" value={date} />
+    <input type="hidden" name="date" value={date} />
     <button class="btn primary" type="submit">Cari</button>
   </form>
+
+  <DateNav date={date} makeUrl={(d) => `/cari?q=${encodeURIComponent(q)}&date=${d}`} />
 
   {q.length >= 2 && (
     results.length === 0 ? (

@@ -1,0 +1,52 @@
+---
+// Navigasi ganti hari: panah Kemarin/Besok + tombol Hari ini + date picker.
+// Props: date (YYYY-MM-DD), makeUrl(tanggal) => string.
+interface Props {
+  date: string;
+  makeUrl: (d: string) => string;
+}
+const { date, makeUrl } = Astro.props;
+
+function shift(dateISO: string, days: number): string {
+  const d = new Date(`${dateISO}T12:00:00+07:00`).getTime() + days * 86400000;
+  const wib = new Date(d + (7 * 60 + new Date(d).getTimezoneOffset()) * 60000);
+  return wib.toISOString().slice(0, 10);
+}
+function todayWIB(): string {
+  const n = Date.now();
+  return new Date(n + (7 * 60 + new Date(n).getTimezoneOffset()) * 60000).toISOString().slice(0, 10);
+}
+const prev = shift(date, -1);
+const next = shift(date, 1);
+const today = todayWIB();
+
+function shortLabel(dateISO: string): string {
+  const d = new Date(`${dateISO}T12:00:00+07:00`);
+  const s = new Intl.DateTimeFormat('id-ID', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' }).format(d);
+  if (dateISO === today) return `Hari ini · ${s}`;
+  return s;
+}
+---
+<div class="datenav">
+  <a class="btn" href={makeUrl(prev)} title="Hari sebelumnya">◀ {shortLabel(prev).split(' · ')[0]}</a>
+  {date !== today && <a class="btn primary" href={makeUrl(today)}>● Hari ini</a>}
+  <a class="btn" href={makeUrl(next)} title="Hari berikutnya">{shortLabel(next).split(' · ')[0]} ▶</a>
+  <form method="get" class="datenav-pick" id="datenav-form">
+    <input type="date" name="date" value={date} min="2026-08-01" max="2030-12-31" onchange="this.form.submit()" title="Pilih tanggal" />
+  </form>
+</div>
+<script is:inline>
+  // pertahankan query lain (mis. ?q= / ?kategori=) saat ganti tanggal via date picker
+  (() => {
+    const form = document.getElementById('datenav-form');
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = '1';
+    const params = new URLSearchParams(location.search);
+    for (const [k, v] of params) {
+      if (k === 'date') continue;
+      const h = document.createElement('input');
+      h.type = 'hidden'; h.name = k; h.value = v;
+      form.appendChild(h);
+    }
+  })();
+</script>

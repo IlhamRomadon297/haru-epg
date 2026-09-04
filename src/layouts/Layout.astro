@@ -13,7 +13,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%238b5cf6'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>H</text></svg>" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <script is:inline>
       try {
         const t = localStorage.getItem('haru-theme');
@@ -69,10 +69,10 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .top-inner { display: flex; align-items: center; gap: 12px; height: 62px; }
       .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 1.15rem; }
       .logo-mark {
-        width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
-        background: linear-gradient(135deg, #7c3aed, #c084fc);
-        color: #fff; font-weight: 900; box-shadow: var(--shadow);
+        width: 34px; height: 34px; border-radius: 11px; overflow: hidden;
+        box-shadow: var(--shadow); flex-shrink: 0; display: block;
       }
+      .logo-mark img { width: 100%; height: 100%; display: block; }
       .logo small { display: block; font-size: 0.66rem; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; }
       nav.main { display: flex; gap: 4px; margin-left: 8px; }
       nav.main a {
@@ -103,8 +103,8 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .grid-channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
       .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
       .card-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 10px; }
-      .avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--brand-soft); display: grid; place-items: center; font-weight: 800; color: var(--brand); overflow: hidden; flex-shrink: 0; }
-      .avatar img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+      .avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--brand-soft); display: grid; place-items: center; font-weight: 800; color: var(--brand); overflow: hidden; flex-shrink: 0; position: relative; }
+      .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 4px; background: var(--surface); }
       .card-head h3 { margin: 0; font-size: 1rem; }
       .card-head h3 a { text-decoration: none; }
       .card-head h3 a:hover { color: var(--brand); }
@@ -138,7 +138,11 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .chip { text-decoration: none; font-size: 0.8rem; font-weight: 700; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
       .chip.active, .chip:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
       footer.site { margin: 34px 0 26px; color: var(--muted); font-size: 0.8rem; text-align: center; }
+      footer.site .src { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
       .disclaimer { background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 14px; margin-top: 18px; font-size: 0.8rem; }
+      .datenav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 14px 0; }
+      .datenav .btn { text-decoration: none; }
+      .datenav-pick input[type='date'] { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; font-size: 0.85rem; }
       .detail { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: var(--shadow); }
       .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
       @media (max-width: 720px) {
@@ -153,7 +157,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
     <header class="top">
       <div class="wrap top-inner">
         <a class="logo" href="/">
-          <span class="logo-mark">H</span>
+          <span class="logo-mark"><img src="/logo.svg" alt="Haru EPG" width="34" height="34" /></span>
           <span>Haru EPG<small>JADWAL TV INDONESIA</small></span>
         </a>
         <nav class="main">
@@ -175,12 +179,19 @@ const q = Astro.url.searchParams.get('q') ?? '';
       <slot />
       <div class="disclaimer">
         📌 <strong>Disclaimer:</strong> Jadwal dapat berubah sewaktu-waktu tergantung kebijakan stasiun televisi.
-        Data otomatis dari <a href="https://tivie.id" target="_blank" rel="noopener">tivie.id</a>
-        &amp; override manual via Google Spreadsheet. Disajikan ulang untuk kemudahan.
+        Data otomatis dari <a href="https://tivie.id" target="_blank" rel="noopener">tivie.id</a>,
+        <a href="https://www.mncvision.id/schedule/table" target="_blank" rel="noopener">MNC Vision</a>, dan
+        <a href="https://www.singtel.com/personal/products-services/tv/tv-programme-guide" target="_blank" rel="noopener">Singtel TV</a>
+        (jadwal Singapura dikonversi ke WIB). Disajikan ulang untuk kemudahan.
       </div>
     </main>
     <footer class="site wrap">
-      <p><strong>Haru EPG</strong> — panduan acara TV Indonesia · <a href="/api/schedule">API JSON</a></p>
+      <p><strong>Haru EPG</strong> — panduan acara TV Indonesia · diperbarui otomatis tiap 2 jam · <a href="/api/schedule">API JSON</a></p>
+      <div class="src">
+        <span class="pill light">tivie.id: 24 ch nasional</span>
+        <span class="pill light">MNC Vision: pay TV &amp; internasional</span>
+        <span class="pill light">Singtel TV: HBO · ANIPLUS · Animax</span>
+      </div>
     </footer>
     <script is:inline>
       const btn = document.getElementById('themeToggle');

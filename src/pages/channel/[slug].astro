@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import DateNav from '../../components/DateNav.astro';
 import { getChannelSchedule, isLive, progress, todayWIB } from '../../lib/epg';
 
 export const prerender = false;
@@ -20,7 +21,7 @@ const nowMs = Date.now();
 <Layout title={`Jadwal ${channel.name} Hari Ini — Haru EPG`} description={`Jadwal acara ${channel.name} ${label}, lengkap dengan status LIVE.`}>
   <section class="hero">
     <div style="display:flex;gap:14px;align-items:center">
-      <span class="avatar" style="width:58px;height:58px;background:rgba(255,255,255,.9)">{channel.logo ? <img src={channel.logo} alt={channel.name} /> : channel.name.slice(0,2)}</span>
+      <span class="avatar" style="width:58px;height:58px;background:rgba(255,255,255,.9)">{channel.name.slice(0, 2)}{channel.logo && <img src={channel.logo} alt={channel.name} onerror="this.remove()" />}</span>
       <div>
         <h1 style="margin:0">Jadwal {channel.name}</h1>
         <p>{label} · {channel.programs.length} acara · {channel.category}</p>
@@ -28,13 +29,9 @@ const nowMs = Date.now();
     </div>
   </section>
 
-  <div class="toolbar">
-    <form method="get" style="display:flex;gap:8px;align-items:center">
-      <input type="date" name="date" value={date} />
-      <button class="btn primary" type="submit">Lihat</button>
-      <a class="btn" href={`/channel/${channel.slug}`}>Hari ini</a>
-      <a class="btn" href={`/?kategori=${channel.category}`}>← {channel.category}</a>
-    </form>
+  <DateNav date={date} makeUrl={(d) => `/channel/${channel.slug}?date=${d}`} />
+  <div style="margin:-4px 0 14px">
+    <a class="btn" style="text-decoration:none" href={`/?kategori=${channel.category}`}>← {channel.category}</a>
   </div>
 
   {channel.programs.length === 0 ? (

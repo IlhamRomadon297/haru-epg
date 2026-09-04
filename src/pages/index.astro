@@ -1,5 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import DateNav from '../components/DateNav.astro';
 import { getDaySchedule, isLive, progress, todayWIB } from '../lib/epg';
 import { CATEGORIES } from '../lib/channels';
 
@@ -35,14 +36,7 @@ const liveCount = channels.filter((c) => c.now).length;
     </div>
   </section>
 
-  <div class="toolbar">
-    <form method="get" action="/" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input type="date" name="date" value={day.date} max="2030-12-31" />
-      {validCat && <input type="hidden" name="kategori" value={catParam} />}
-      <button class="btn primary" type="submit">Lihat tanggal</button>
-      <a class="btn" href="/">Hari ini</a>
-    </form>
-  </div>
+  <DateNav date={day.date} makeUrl={(d) => (validCat ? `/?kategori=${catParam}&date=${d}` : `/?date=${d}`)} />
 
   <div class="filter-row" style="margin-bottom:14px">
     <a class={`chip ${!validCat ? 'active' : ''}`} href={dateParam ? `/?date=${day.date}` : '/'}>Semua</a>
@@ -65,7 +59,7 @@ const liveCount = channels.filter((c) => c.now).length;
         return (
           <article class="card">
             <div class="card-head">
-              <span class="avatar">{ch.logo ? <img src={ch.logo} alt={ch.name} loading="lazy" /> : ch.name.slice(0, 2)}</span>
+              <span class="avatar">{ch.name.slice(0, 2)}{ch.logo && <img src={ch.logo} alt={ch.name} loading="lazy" onerror="this.remove()" />}</span>
               <div>
                 <h3><a href={`/channel/${ch.slug}?date=${day.date}`}>{ch.name}</a></h3>
                 <span class="sub">{ch.category} · {ch.programs.length} acara</span>

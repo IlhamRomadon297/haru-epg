@@ -16,7 +16,23 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HaruEPG/1.0 (+https://haru
 interface SingtelItem {
   startDateTime?: string;
   duration?: string | number;
-  program?: { title?: string; subCategory?: string; description?: string };
+  program?: {
+    title?: string;
+    subCategory?: string;
+    description?: string;
+    programValues?: { name?: string; description?: string }[];
+  };
+}
+
+/** Nomor episode dari programValues (MSEPG_Syndicated_Episode_Number). */
+function episodeOf(it: SingtelItem): string | null {
+  const vals = it.program?.programValues ?? [];
+  for (const v of vals) {
+    if (v?.name === 'MSEPG_Syndicated_Episode_Number' && v.description?.trim()) {
+      return v.description.trim();
+    }
+  }
+  return null;
 }
 
 /** "2026-09-03T23:54:00" (+08:00) → ISO WIB "+07:00". */
@@ -51,7 +67,12 @@ export async function fetchSingtelChannel(
       if (start.slice(0, 10) !== dateISO) continue; // item nyebrang tengah malam
       const dur = Number(it.duration ?? 0) || 0;
       const end = sgtToWibIso(it.startDateTime, dur);
-      const title = (it.program?.title ?? 'Tanpa Judul').trim();
+      let title = (it.program?.title ?? 'Tanpa Judul').trim();
+      // Tambahkan "(Ep N)" seperti di panduan Singtel, bila belum ada di judul
+      const ep = episodeOf(it);
+      if (ep && !/(\bep\.?\s*\d|\(\d+\)|episode\s*\d)/i.test(title)) {
+        title = `${title} (Ep ${ep})`;
+      }
       out.push({
         id: `sg-${channel.slug}-${start}`,
         channelSlug: channel.slug,
