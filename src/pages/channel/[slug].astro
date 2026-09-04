@@ -41,27 +41,37 @@ const nowMs = Date.now();
       <p>Channel {channel.name} belum punya data {label}. Coba tanggal lain.</p>
     </div>
   ) : (
-    <div class="card">
-      <ul class="timeline" style="padding:10px 18px 18px">
-        {channel.programs.map((p) => {
-          const cur = isLive(nowMs, p);
-          const pct = cur ? progress(nowMs, p) : 0;
-          return (
-            <li class={cur ? 'current' : ''} style="padding:12px 0">
-              <span class="t-time">{p.startLabel.replace(' WIB','')}<br/><span style="color:var(--muted);font-weight:600">s/d {p.endLabel.replace(' WIB','')}</span></span>
-              <div class="t-title" style="flex:1">
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  {cur && <span class="live-badge"><span class="live-dot"></span>LIVE</span>}
-                  {p.manual && <span class="pill light" style="font-size:.68rem">✏️ manual</span>}
-                  <a href={`/program/${p.slug}?date=${date}`} style="font-weight:800;font-size:1rem">{p.title}</a>
+    <>
+      {channel.next && (
+        <div class="now-box" style="margin-bottom:14px">
+          <div style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Berikutnya</div>
+          <div class="prog-title"><a href={`/program/${channel.next.slug}?date=${date}`}>{channel.next.title}</a></div>
+          <div class="prog-time">{channel.next.startLabel.replace(' WIB','')} – {channel.next.endLabel.replace(' WIB','')}</div>
+          {channel.next.description && <div class="t-desc" style="margin-top:4px;-webkit-line-clamp:2">{channel.next.description}</div>}
+        </div>
+      )}
+      <div class="card">
+        <ul class="timeline" style="padding:10px 18px 18px">
+          {channel.programs.map((p) => {
+            const cur = isLive(nowMs, p);
+            const pct = cur ? progress(nowMs, p) : 0;
+            return (
+              <li class={cur ? 'current' : ''} style="padding:12px 0">
+                <span class="t-time">{p.startLabel.replace(' WIB','')}<br/><span style="color:var(--muted);font-weight:600">s/d {p.endLabel.replace(' WIB','')}</span></span>
+                <div class="t-title" style="flex:1">
+                  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                    {cur && <span class="live-badge"><span class="live-dot"></span>LIVE</span>}
+                    {p.manual && <span class="pill light" style="font-size:.68rem">✏️ manual</span>}
+                    <a href={`/program/${p.slug}?date=${date}`} style="font-weight:800;font-size:1rem">{p.title}</a>
+                  </div>
+                  {cur && <div class="progress"><div style={`width:${pct.toFixed(1)}%`}></div></div>}
+                  {p.description && <div class="t-desc" style="-webkit-line-clamp:3">{p.description}</div>}
                 </div>
-                {cur && <div class="progress"><div style={`width:${pct.toFixed(1)}%`}></div></div>}
-                {p.description && <div class="t-desc" style="-webkit-line-clamp:3">{p.description}</div>}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </>
   )}
 </Layout>

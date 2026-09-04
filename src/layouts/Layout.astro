@@ -172,9 +172,15 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
       @media (max-width: 720px) {
         nav.main { display: none; }
+        .logo small { display: none; }
+        .logo { font-size: 1rem; gap: 8px; }
+        .logo-mark { width: 30px; height: 30px; border-radius: 9px; }
+        .searchbox input { width: 80px; font-size: 0.82rem; }
+        .searchbox { padding: 4px 4px 4px 10px; gap: 4px; }
+        .btn.primary { padding: 5px 10px; font-size: 0.8rem; }
+        .theme-btn { width: 32px; height: 32px; }
         footer.site .src { flex-wrap: wrap; }
         footer.site .src .pill { white-space: normal; }
-        .searchbox input { width: 92px; }
         .grid-channels { grid-template-columns: 1fr; }
         .hero { padding: 20px 16px; }
       }
