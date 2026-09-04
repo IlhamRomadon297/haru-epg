@@ -42,6 +42,29 @@ function sgtToWibIso(local: string, plusSeconds = 0): string {
   return `${wib}:00+07:00`;
 }
 
+async function fetchSingtelJson(dateStr: string): Promise<Record<string, SingtelItem[]> | null> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(
+      `https://www.singtel.com/etc/singtel/public/tv/epg-parsed-data/${dateStr}.json`,
+      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: ctrl.signal },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as Record<string, SingtelItem[]>;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function nextDayISO(dateISO: string): string {
+  const d = new Date(`${dateISO}T12:00:00+07:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export async function fetchSingtelChannel(
   epgId: string,
   channel: Channel,
@@ -49,52 +72,48 @@ export async function fetchSingtelChannel(
 ): Promise<EpgProgram[]> {
   const [Y, M, D] = dateISO.split('-');
   if (!Y || !M || !D) return [];
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 15000);
-  try {
-    const res = await fetch(
-      `https://www.singtel.com/etc/singtel/public/tv/epg-parsed-data/${D}${M}${Y}.json`,
-      { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: ctrl.signal },
-    );
-    if (!res.ok) return [];
-    const data = (await res.json()) as Record<string, SingtelItem[]>;
-    const items = data[epgId] ?? [];
 
-    const out: EpgProgram[] = [];
-    for (const it of items) {
-      if (!it?.startDateTime) continue;
-      const start = sgtToWibIso(it.startDateTime);
-      if (start.slice(0, 10) !== dateISO) continue; // item nyebrang tengah malam
-      const dur = Number(it.duration ?? 0) || 0;
-      const end = sgtToWibIso(it.startDateTime, dur);
-      let title = (it.program?.title ?? 'Tanpa Judul').trim();
-      // Tambahkan "(Ep N)" seperti di panduan Singtel, bila belum ada di judul
-      const ep = episodeOf(it);
-      if (ep && !/(\bep\.?\s*\d|\(\d+\)|episode\s*\d)/i.test(title)) {
-        title = `${title} (Ep ${ep})`;
-      }
-      out.push({
-        id: `sg-${channel.slug}-${start}`,
-        channelSlug: channel.slug,
-        channelName: channel.name,
-        date: dateISO,
-        start,
-        end,
-        startLabel: `${start.slice(11, 16)} WIB`,
-        endLabel: `${end.slice(11, 16)} WIB`,
-        title,
-        category: it.program?.subCategory || undefined,
-        description: it.program?.description || undefined,
-        slug: programSlug(channel.slug, start, title),
-      });
+  // Fetch today + tomorrow SGT data supaya program 23:00-23:59 WIB (00:00-00:59 SGT besok) keambil
+  const [Y2, M2, D2] = nextDayISO(dateISO).split('-');
+  const [todayData, tomorrowData] = await Promise.all([
+    fetchSingtelJson(`${D}${M}${Y}`),
+    fetchSingtelJson(`${D2}${M2}${Y2}`),
+  ]);
+
+  const allItems: SingtelItem[] = [
+    ...(todayData?.[epgId] ?? []),
+    ...(tomorrowData?.[epgId] ?? []),
+  ];
+
+  const out: EpgProgram[] = [];
+  for (const it of allItems) {
+    if (!it?.startDateTime) continue;
+    const start = sgtToWibIso(it.startDateTime);
+    if (start.slice(0, 10) !== dateISO) continue;
+    const dur = Number(it.duration ?? 0) || 0;
+    const end = sgtToWibIso(it.startDateTime, dur);
+    let title = (it.program?.title ?? 'Tanpa Judul').trim();
+    const ep = episodeOf(it);
+    if (ep && !/(\bep\.?\s*\d|\(\d+\)|episode\s*\d)/i.test(title)) {
+      title = `${title} (Ep ${ep})`;
     }
-    out.sort((a, b) => a.start.localeCompare(b.start));
-    return out;
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(t);
+    out.push({
+      id: `sg-${channel.slug}-${start}`,
+      channelSlug: channel.slug,
+      channelName: channel.name,
+      date: dateISO,
+      start,
+      end,
+      startLabel: `${start.slice(11, 16)} WIB`,
+      endLabel: `${end.slice(11, 16)} WIB`,
+      title,
+      category: it.program?.subCategory || undefined,
+      description: it.program?.description || undefined,
+      slug: programSlug(channel.slug, start, title),
+    });
   }
+  out.sort((a, b) => a.start.localeCompare(b.start));
+  return out;
 }
 
 export const singtelProvider: Provider = {
