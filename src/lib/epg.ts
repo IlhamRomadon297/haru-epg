@@ -98,6 +98,13 @@ async function writeCache(key: string, data: DaySchedule, ttl: number): Promise<
   mem.set(key, { exp: Date.now() + ttl * 1000, data });
 }
 
+/** Hitung ulang now/next dengan jam saat ini (wajib dipanggil untuk data dari cache). */
+export function attachLive(channels: ChannelSchedule[], nowMs = Date.now()): void {
+  for (const c of channels) {
+    c.now = c.programs.find((p) => isLive(nowMs, p)) ?? null;
+    c.next = c.programs.find((p) => Date.parse(p.start) > nowMs) ?? null;
+  }
+}
 /** Bangun DaySchedule dari daftar program mentah (dipakai jalur D1 & live). */
 function buildDay(date: string, all: EpgProgram[], source: DaySchedule['source']): DaySchedule {
   const nowMs = Date.now();
@@ -145,7 +152,11 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
   const key = cacheKey('day', date);
 
   const cached = await readCache(key);
-  if (cached) return cached;
+  if (cached) {
+    // now/next yang tersimpan basi (dihitung saat cache ditulis) → hitung ulang
+    attachLive(cached.channels);
+    return cached;
+  }
 
   // 1) D1 dulu (diisi cron tiap 2 jam — instan, tanpa scrape per request).
   //    Aturan kesegaran: tanggal lampau selalu OK (jadwal arsip), hari ini/masa depan < 12 jam.

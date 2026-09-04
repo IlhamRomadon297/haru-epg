@@ -48,14 +48,16 @@ const liveCount = channels.filter((c) => c.now).length;
   {withPrograms.length === 0 ? (
     <div class="card empty">
       <h3>Jadwal belum tersedia 😴</h3>
-      <p>Scrape tivie.id gagal / tanggal di luar jangkauan. Coba tanggal lain atau isi via Google Spreadsheet.</p>
+      <p>Sumber sedang tidak bisa dijangkau / tanggal di luar jangkauan (arsip H-3 s/d H+10). Coba tanggal lain.</p>
       <p style="font-size:.8rem">Tanggal: {day.date} · <a href="/api/schedule?date={day.date}">cek API</a></p>
     </div>
   ) : (
     <div class="grid-channels">
       {withPrograms.map((ch) => {
         const live = ch.now && isLive(nowMs, ch.now);
-        const pct = ch.now ? progress(nowMs, ch.now) : 0;
+        // Sedang tayang → tampilkan itu; jeda/kosong → tampilkan acara berikutnya
+        const feat = live ? ch.now! : (ch.next ?? ch.now);
+        const pct = live ? progress(nowMs, ch.now!) : 0;
         return (
           <article class="card">
             <div class="card-head">
@@ -67,10 +69,10 @@ const liveCount = channels.filter((c) => c.now).length;
               <span style="flex:1"></span>
               {live && <span class="live-badge"><span class="live-dot"></span>LIVE</span>}
             </div>
-            {ch.now && (
+            {feat && (
               <div class={`now-box ${live ? 'live' : ''}`}>
-                <div class="prog-time">{live ? 'SEDANG TAYANG' : 'BERIKUTNYA'} · {ch.now.startLabel} – {ch.now.endLabel}</div>
-                <div class="prog-title"><a href={`/program/${ch.now.slug}?date=${day.date}`}>{ch.now.title}</a></div>
+                <div class="prog-time">{live ? 'SEDANG TAYANG' : 'BERIKUTNYA'} · {feat.startLabel} – {feat.endLabel}</div>
+                <div class="prog-title"><a href={`/program/${feat.slug}?date=${day.date}`}>{feat.title}</a></div>
                 {live && <div class="progress"><div style={`width:${pct.toFixed(1)}%`}></div></div>}
               </div>
             )}
