@@ -6,15 +6,18 @@ foreach ($f in (Get-ChildItem $d -Filter *.png | Sort-Object Name)) {
   $slug = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
   $raw = New-Object System.Drawing.Bitmap($f.FullName)
   
-  # Step 1: Find content bounds (non-white pixels)
+  # Step 1: Find content bounds (non-white, non-transparent pixels)
+  # Scan every pixel, generous threshold
   $minY = $raw.Height; $maxY = 0
   for ($y = 0; $y -lt $raw.Height; $y++) {
     $hasContent = $false
-    for ($x = 0; $x -lt $raw.Width; $x += 3) {
+    for ($x = 0; $x -lt $raw.Width; $x += 2) {
       $c = $raw.GetPixel($x, $y)
-      if ($c.A -gt 10 -and ($c.R -lt 230 -or $c.G -lt 230 -or $c.B -lt 230)) {
-        $hasContent = $true; break
-      }
+      # Skip fully transparent
+      if ($c.A -lt 5) { continue }
+      # Skip near-white (background)
+      if ($c.R -gt 240 -and $c.G -gt 240 -and $c.B -gt 240) { continue }
+      $hasContent = $true; break
     }
     if ($hasContent) {
       if ($y -lt $minY) { $minY = $y }
@@ -23,78 +26,66 @@ foreach ($f in (Get-ChildItem $d -Filter *.png | Sort-Object Name)) {
   }
   
   if ($minY -ge $raw.Height) {
-    # All white — skip
     $raw.Dispose()
     Write-Output "SKIP $slug (all white)"
     continue
   }
   
-  # Step 2: Detect blue bar in the region below content (maxY+1 to bottom)
+  # Step 2: Detect blue bar — scan whole image bottom-up to find continuous blue band
+  # The bar is a horizontal band of blue (R<60, G<120, B>130) spanning most of the width
   $barStart = -1; $barEnd = -1
-  $contentBottom = $maxY + 1
-  for ($y = $contentBottom; $y -lt $raw.Height; $y++) {
+  $inBlueBand = $false
+  for ($y = $raw.Height - 1; $y -ge 0; $y--) {
     $bluePx = 0; $totPx = 0
-    for ($x = 0; $x -lt $raw.Width; $x += [Math]::Max(1, [int]($raw.Width / 20))) {
+    $step = [Math]::Max(1, [int]($raw.Width / 30))
+    for ($x = 0; $x -lt $raw.Width; $x += $step) {
       $totPx++
       $c = $raw.GetPixel($x, $y)
-      # Blue bar: deep blue (R<50, G<100, B>140)
-      if ($c.R -lt 50 -and $c.G -lt 100 -and $c.B -gt 140) { $bluePx++ }
+      if ($c.R -lt 60 -and $c.G -lt 120 -and $c.B -gt 130) { $bluePx++ }
     }
-    if ($totPx -gt 0 -and ($bluePx / $totPx) -ge 0.5) {
-      if ($barStart -lt 0) { $barStart = $y }
-      $barEnd = $y
-    }
-  }
-  
-  # Also check for blue bar WITHIN the content area (bar overlaps logo)
-  # Scan from bottom of content upward
-  if ($barStart -lt 0) {
-    for ($y = $maxY; $y -ge [Math]::Max(0, $maxY - 150); $y--) {
-      $bluePx = 0; $totPx = 0
-      for ($x = 0; $x -lt $raw.Width; $x += [Math]::Max(1, [int]($raw.Width / 20))) {
-        $totPx++
-        $c = $raw.GetPixel($x, $y)
-        if ($c.R -lt 50 -and $c.G -lt 100 -and $c.B -gt 140) { $bluePx++ }
+    $isBlueRow = ($totPx -gt 0 -and ($bluePx / $totPx) -ge 0.45)
+    
+    if ($isBlueRow) {
+      if (-not $inBlueBand) {
+        $barEnd = $y  # bottom of blue band
+        $inBlueBand = $true
       }
-      if ($totPx -gt 0 -and ($bluePx / $totPx) -ge 0.6) {
-        if ($barEnd -lt 0) { $barEnd = $y }
-        $barStart = $y
-      } elseif ($barEnd -ge 0) {
-        break  # Found bottom of bar, now found top
-      }
+      $barStart = $y  # keeps updating to top of blue band
+    } elseif ($inBlueBand) {
+      break  # Found top of blue band
     }
   }
   
   # Step 3: Determine crop region
-  $cropTop = [Math]::Max(0, $minY - 5)  # Small padding above
-  $cropBot = $maxY + 1  # Default: include all content
-  
-  if ($barStart -ge 0 -and $barEnd -ge 0) {
-    # Bar found — crop just above the bar
-    $cropBot = [Math]::Max($barStart - 1, $cropTop)
+  if ($barStart -ge 0 -and $barEnd -ge 0 -and $barStart -gt $minY) {
+    # Bar found — crop just above the bar (include generous padding)
+    $cropTop = [Math]::Max(0, $minY - 15)
+    $cropBot = $barStart
     Write-Output "BAR  $slug (bar y=$barStart-$barEnd, content y=$minY-$maxY, crop=$cropTop-$cropBot)"
   } else {
-    Write-Output "NOBAR $slug (content y=$minY-$maxY)"
+    # No bar — keep all content with padding
+    $cropTop = [Math]::Max(0, $minY - 15)
+    $cropBot = [Math]::Min($raw.Height, $maxY + 15)
+    Write-Output "NOBAR $slug (content y=$minY-$maxY, crop=$cropTop-$cropBot)"
   }
   
-  # Step 4: Crop and scale to 500x500 on white canvas
   $cropH = $cropBot - $cropTop
-  if ($cropH -lt 10) { $cropH = $maxY - $cropTop + 1 }  # Fallback
+  if ($cropH -lt 10) { $cropH = $maxY - $cropTop + 10 }
   
+  # Step 4: Draw onto 500x500 white canvas, preserving aspect ratio
   $out = New-Object System.Drawing.Bitmap(500, 500)
   $g = [System.Drawing.Graphics]::FromImage($out)
   $g.InterpolationMode = 'HighQualityBicubic'
   $g.CompositingQuality = 'HighQuality'
   $g.Clear([System.Drawing.Color]::White)
   
-  # Scale to fit 460x460 (leaving 20px padding each side)
-  $s = [Math]::Min(460 / [Math]::Max($raw.Width, 1), 460 / [Math]::Max($cropH, 1))
+  # Fit inside 470x470 (15px margin each side)
+  $s = [Math]::Min(470 / [Math]::Max($raw.Width, 1), 470 / [Math]::Max($cropH, 1))
   $dw = [int]($raw.Width * $s)
   $dh = [int]($cropH * $s)
   $dx = [int]((500 - $dw) / 2)
   $dy = [int]((500 - $dh) / 2)
   
-  # DrawImage with source crop rect
   $srcRect = New-Object System.Drawing.Rectangle(0, $cropTop, $raw.Width, $cropH)
   $dstRect = New-Object System.Drawing.Rectangle($dx, $dy, $dw, $dh)
   $g.DrawImage($raw, $dstRect, $srcRect, [System.Drawing.GraphicsUnit]::Pixel)
