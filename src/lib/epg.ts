@@ -202,7 +202,7 @@ export async function getChannelSchedule(
   const day = await getDaySchedule(env, date);
   const found = day.channels.find((c) => c.slug === ch.slug);
   if (found && found.programs.length > 0) {
-    return { channel: { ...found, description: ch.description }, date, label: day.label };
+    return { channel: { ...found, name: ch.name, description: ch.description }, date, label: day.label };
   }
 
   // Fallback: scrape langsung 1 channel via providernya (mis. channel baru / cache kosong sebagian)

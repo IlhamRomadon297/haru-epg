@@ -47,7 +47,7 @@ function formatTime(iso) {
 function buildMessages(date, slug, channelName, programs) {
   const nowMs = Date.now();
   const header = `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n`;
-  const footer = `\n<a href="https://haru-epg.pages.dev/channel/${slug}">🌐 haru-epg.pages.dev</a>`;
+  const footer = `\n\n<a href="https://haru-epg.pages.dev/channel/${slug}">🌐 haru-epg.pages.dev</a>`;
 
   if (programs.length === 0) {
     return [header + '\nJadwal tidak tersedia' + footer];
@@ -142,6 +142,10 @@ async function main() {
 
       if (config.message_thread_id) {
         body.message_thread_id = config.message_thread_id;
+      }
+
+      if (i === 0 && config.reply_to_message_id) {
+        body.reply_to_message_id = config.reply_to_message_id;
       }
 
       const result = await telegram('sendMessage', body);
