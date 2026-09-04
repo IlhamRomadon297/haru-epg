@@ -2,7 +2,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { findProgram, getDaySchedule, isLive, progress, todayWIB } from '../../lib/epg';
 import { getChannel } from '../../lib/channels';
-import { fetchTivieProgram } from '../../lib/tivie';
+import { fetchTivieProgram } from '../../lib/providers/tivie';
 
 export const prerender = false;
 

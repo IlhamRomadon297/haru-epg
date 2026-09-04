@@ -1,5 +1,5 @@
 import { CHANNELS, getChannel } from './channels';
-import { fetchManyChannels, fetchTivieChannel } from './tivie';
+import { fetchProviderSchedules, getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
@@ -112,20 +112,16 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
   const cached = await readCache(key);
   if (cached) return cached;
 
-  const withTivie = CHANNELS.filter((c) => c.tivieSlug);
-  const datePath = toDatePath(date);
+  const fetchable = CHANNELS.filter((c) => providerRefOf(c) !== '');
 
-  // Sheet + tivie paralel; sheet tidak boleh menggagalkan halaman
-  const [sheet, tivieMap] = await Promise.all([
+  // Sheet + semua provider paralel; sheet tidak boleh menggagalkan halaman
+  const [sheet, provMap] = await Promise.all([
     fetchSheetOverrides(env, date),
-    fetchManyChannels(
-      withTivie.map((c) => c.tivieSlug!),
-      datePath,
-    ).catch(() => new Map<string, EpgProgram[]>()),
+    fetchProviderSchedules(fetchable, date).catch(() => new Map<string, EpgProgram[]>()),
   ]);
 
-  const flatTivie = [...tivieMap.values()].flat();
-  const all = mergePrograms(flatTivie, sheet, date);
+  const flatFetched = [...provMap.values()].flat();
+  const all = mergePrograms(flatFetched, sheet, date);
 
   const nowMs = Date.now();
   const channels: ChannelSchedule[] = CHANNELS.map((c) => {
@@ -185,11 +181,11 @@ export async function getChannelSchedule(
     return { channel: { ...found, description: ch.description }, date, label: day.label };
   }
 
-  // Fallback: scrape langsung 1 channel (mis. channel baru / cache kosong sebagian)
+  // Fallback: scrape langsung 1 channel via providernya (mis. channel baru / cache kosong sebagian)
   let programs: EpgProgram[] = [];
-  if (ch.tivieSlug) {
+  if (providerRefOf(ch) !== '') {
     try {
-      programs = await fetchTivieChannel(ch.tivieSlug, toDatePath(date));
+      programs = await getProvider(ch).fetchChannel(ch, date);
     } catch {
       programs = [];
     }

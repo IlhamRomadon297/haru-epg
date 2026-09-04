@@ -1,5 +1,6 @@
-import { getChannel } from './channels';
-import type { EpgProgram } from './types';
+import { getChannel, type Channel } from '../channels';
+import type { EpgProgram } from '../types';
+import type { Provider } from './types';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HaruEPG/1.0 (+https://haru-epg.pages.dev)';
 
@@ -183,24 +184,16 @@ export async function fetchTivieProgram(kind: 'program' | 'film', slug: string):
   return { title: decodeEntities(title), category, poster, description, airings };
 }
 
-/** Fetch banyak channel dengan batas konkurensi agar tidak membanjiri tivie.id. */
-export async function fetchManyChannels(
-  tivieSlugs: string[],
-  datePath?: string,
-  concurrency = 6,
-): Promise<Map<string, EpgProgram[]>> {
-  const out = new Map<string, EpgProgram[]>();
-  let idx = 0;
-  async function worker() {
-    while (idx < tivieSlugs.length) {
-      const s = tivieSlugs[idx++];
-      try {
-        out.set(s, await fetchTivieChannel(s, datePath));
-      } catch {
-        out.set(s, []);
-      }
+export const tivieProvider: Provider = {
+  id: 'tivie',
+  name: 'tivie.id',
+  supportsDates: true,
+  async fetchChannel(channel: Channel, dateISO: string): Promise<EpgProgram[]> {
+    const ref = channel.providerRef ?? channel.tivieSlug ?? channel.slug;
+    try {
+      return await fetchTivieChannel(ref, dateISO.replaceAll('-', ''));
+    } catch {
+      return [];
     }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, tivieSlugs.length) }, worker));
-  return out;
-}
+  },
+};

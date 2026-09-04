@@ -1,5 +1,5 @@
 import { CHANNELS, getChannel } from './channels';
-import { programSlug } from './tivie';
+import { programSlug } from './providers/tivie';
 import type { EpgProgram } from './types';
 
 export interface SheetEnv {

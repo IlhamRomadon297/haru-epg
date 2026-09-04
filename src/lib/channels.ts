@@ -6,6 +6,13 @@ export interface Channel {
   category: Category;
   /** slug di tivie.id — kosong berarti hanya dari Spreadsheet */
   tivieSlug?: string;
+  /**
+   * id provider sumber (lihat src/lib/providers/index.ts): 'tivie' | 'vidio' | 'mncvision' | 'singtel'.
+   * Default: 'tivie' bila ada tivieSlug/providerRef.
+   */
+  provider?: string;
+  /** id/slug channel di situs provider (default = tivieSlug). Kosong = khusus Spreadsheet. */
+  providerRef?: string;
   logo?: string;
   description?: string;
 }
@@ -49,6 +56,9 @@ export const CHANNELS: Channel[] = [
   { slug: 'cnn-intl', name: 'CNN International', category: 'internasional' },
   { slug: 'al-jazeera', name: 'Al Jazeera', category: 'internasional' },
   { slug: 'nhk-world', name: 'NHK World', category: 'internasional' },
+  // Contoh channel dari provider lain — aktifkan setelah provider diimplementasikan
+  // (lihat src/lib/providers/*.ts):
+  // { slug: 'rcti-vidio', name: 'RCTI (Vidio)', category: 'nasional', provider: 'vidio', providerRef: '665' },
 ];
 
 export const CATEGORIES: { slug: Category; name: string; description: string }[] = [
