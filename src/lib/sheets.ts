@@ -1,4 +1,4 @@
-import { getChannel } from './channels';
+import { CHANNELS, getChannel } from './channels';
 import { programSlug } from './tivie';
 import type { EpgProgram } from './types';
 
@@ -58,8 +58,12 @@ function rowsToPrograms(raw: { header: string[]; values: unknown[] }[]): EpgProg
     const endRaw = get(['jam selesai', 'jam_selesai', 'selesai', 'end']);
     const title = get(['judul acara', 'judul', 'title', 'acara']);
     if (!channelRaw || !title) continue;
-    const ch = getChannel(channelRaw.toLowerCase().replace(/\s+/g, '-')) ??
-      getChannel(channelRaw.toLowerCase());
+    const raw = channelRaw.trim();
+    const dash = raw.toLowerCase().replace(/\s+/g, '-');
+    const ch =
+      getChannel(raw.toLowerCase()) ??
+      getChannel(dash) ??
+      CHANNELS.find((c) => c.name.toLowerCase() === raw.toLowerCase());
     const channelSlug = ch?.slug ?? channelRaw.toLowerCase().replace(/\s+/g, '-');
     const channelName = ch?.name ?? channelRaw;
     const date = normalizeDate(dateRaw);
