@@ -1,4 +1,3 @@
-import { programSlug } from './providers/tivie';
 import type { EpgProgram } from './types';
 
 /** Structural typing untuk D1Database (tanpa perlu @cloudflare/workers-types). */
@@ -38,7 +37,7 @@ export async function readDayFromD1(
     title: str(r.title),
     category: (r.category as string | null) ?? undefined,
     description: (r.description as string | null) ?? undefined,
-    slug: str(r.slug) || programSlug(str(r.channel_slug), str(r.start), str(r.title)),
+    slug: str(r.slug),
     manual: Number(r.manual ?? 0) === 1,
   }));
   const updatedAt = rows.reduce(
