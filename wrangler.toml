@@ -10,7 +10,7 @@ database_name = "haru-epg"
 database_id = "2335eb0a-ea21-4f9f-8a73-3bcfbca5ec91"
 
 [vars]
-CACHE_TTL = "5400"
+CACHE_TTL = "3600"
 
 [observability]
 enabled = true

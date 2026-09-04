@@ -30,7 +30,7 @@ async function syncDate(env: CronEnv, date: string): Promise<{ date: string; cou
 const ROTATE_OFFSETS = [-3, -2, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default {
-  // Cron tiap 2 jam: hari ini + besok (prioritas kesegaran) + 1 tanggal rotasi
+  // Cron tiap jam: hari ini + besok (prioritas kesegaran) + 1 tanggal rotasi
   // (satu putaran penuh ±24 jam mencakup arsip H-3 s/d depan H+10).
   async scheduled(_event: unknown, env: CronEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
     ctx.waitUntil(

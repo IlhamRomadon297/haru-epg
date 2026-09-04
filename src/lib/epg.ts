@@ -6,7 +6,7 @@ import { fetchAllPrograms, mergePrograms } from './sync';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
 export const DEFAULT_TTL = 5400; // 1.5 jam
-/** D1 dianggap segar bila ditulis < 12 jam lalu (cron jalan tiap 2 jam). */
+/** D1 dianggap segar bila ditulis < 12 jam lalu (cron jalan tiap jam). */
 export const D1_MAX_AGE_MS = 12 * 3600 * 1000;
 
 type Env = SheetEnv & { CACHE_TTL?: string; DB?: unknown };
@@ -158,7 +158,7 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
     return cached;
   }
 
-  // 1) D1 dulu (diisi cron tiap 2 jam — instan, tanpa scrape per request).
+  // 1) D1 dulu (diisi cron tiap jam — instan, tanpa scrape per request).
   //    Aturan kesegaran: tanggal lampau selalu OK (jadwal arsip), hari ini/masa depan < 12 jam.
   if (env.DB) {
     try {

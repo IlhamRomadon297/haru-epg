@@ -13,12 +13,12 @@ Website **Electronic Program Guide (EPG)** untuk jadwal acara TV Indonesia: **TV
 - 📄 Halaman channel, detail acara, dan API JSON (`/api/schedule`, `/api/channel/[slug]`, `/api/search`)
 - 🌙 Dark mode (toggle + otomatis ikut sistem)
 - 📱 Responsive mobile-first
-- ⚡ Full otomatis: scrape terjadwal tiap 2 jam ke Cloudflare D1, situs baca D1 (instan)
+- ⚡ Full otomatis: scrape terjadwal setiap jam ke Cloudflare D1, situs baca D1 (instan)
 
 ## 🏗️ Arsitektur
 
 ```
-[tivie.id | MNC Vision | Singtel TV] ──scrape──▶ [Worker cron tiap 2 jam] ──▶ [Cloudflare D1]
+[tivie.id | MNC Vision | Singtel TV] ──scrape──▶ [Worker cron tiap jam] ──▶ [Cloudflare D1]
                                                                                     │
 Pengunjung ──▶ [Astro SSR di Cloudflare Pages] ──▶ D1 dulu, fallback scrape live ──▶ Cache API
 ```
@@ -44,7 +44,7 @@ src/
   pages/              # /, /channel/[slug], /program/[slug], /kategori/[slug], /cari
   pages/api/          # /api/schedule, /api/channel/[slug], /api/search
   components/DateNav.astro  # Navigasi ◀ Kemarin / Hari ini / Besok ▶
-worker/cron.ts        # Cron tiap 2 jam: sync hari ini + besok + 1 tanggal rotasi
+worker/cron.ts        # Cron tiap jam: sync hari ini + besok + 1 tanggal rotasi
 migrations/           # Skema D1
 tools/                # Skrip probe riset + generator contoh seed
 ```
@@ -72,7 +72,7 @@ npx wrangler pages deploy ./dist --project-name=haru-epg
 # 3) Cron worker
 npx wrangler deploy --config worker/wrangler.cron.toml
 
-# 4) Sync manual pertama (opsional, cron jalan sendiri tiap 2 jam)
+# 4) Sync manual pertama (opsional, cron jalan sendiri tiap jam)
 #    /sync?key=ISI_CRONT_KEY&date=YYYY-MM-DD di URL worker
 ```
 
