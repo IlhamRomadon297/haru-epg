@@ -47,24 +47,17 @@ function buildChannelMessage(date, ch) {
   lines.push(`<i>${prettyDate(date)}</i>`);
   lines.push('');
 
-  // Tampilkan program berikutnya (max 8 ke depan dari sekarang)
   const nowMs = Date.now();
-  const liveIdx = ch.programs.findIndex((p) => {
-    const s = Date.parse(p.start);
-    const e = Date.parse(p.end);
-    return Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
-  });
-  const startIdx = liveIdx >= 0 ? liveIdx : ch.programs.findIndex((p) => Date.parse(p.start) > nowMs);
-  const upcoming = ch.programs.slice(Math.max(0, startIdx), Math.max(0, startIdx) + 8);
 
-  if (upcoming.length === 0) {
+  if (ch.programs.length === 0) {
     lines.push(`Jadwal tidak tersedia`);
   } else {
-    for (const p of upcoming) {
-      const isCur = liveIdx >= 0 && p === ch.programs[liveIdx];
+    for (const p of ch.programs) {
+      const s = Date.parse(p.start);
+      const e = Date.parse(p.end);
+      const isCur = Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
       const icon = isCur ? '🔴' : '•';
-      lines.push(`${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b>`);
-      lines.push(`  ${p.title}`);
+      lines.push(`${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`);
     }
   }
 
