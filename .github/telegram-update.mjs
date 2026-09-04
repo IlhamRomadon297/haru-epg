@@ -7,6 +7,7 @@ const config = JSON.parse(readFileSync(resolve(__dirname, 'telegram-config.json'
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_BASE = 'https://haru-epg.pages.dev';
+const TG_MAX = 4096;
 
 if (!BOT_TOKEN) {
   console.error('TELEGRAM_BOT_TOKEN not set');
@@ -30,11 +31,13 @@ function prettyDate(dateISO) {
   }).format(d);
 }
 
-async function fetchSchedule() {
-  const date = todayWIB();
-  const res = await fetch(`${API_BASE}/api/schedule?date=${date}`);
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return { date, data: await res.json() };
+async function fetchChannel(slug, date) {
+  const res = await fetch(`${API_BASE}/api/channel/${slug}?date=${date}`);
+  if (!res.ok) {
+    console.error(`  API ${res.status} for ${slug}`);
+    return null;
+  }
+  return res.json();
 }
 
 function formatTime(iso) {
@@ -48,11 +51,12 @@ function buildChannelMessage(date, ch) {
   lines.push('');
 
   const nowMs = Date.now();
+  const programs = ch.channel?.programs ?? ch.programs ?? [];
 
-  if (ch.programs.length === 0) {
+  if (programs.length === 0) {
     lines.push(`Jadwal tidak tersedia`);
   } else {
-    for (const p of ch.programs) {
+    for (const p of programs) {
       const s = Date.parse(p.start);
       const e = Date.parse(p.end);
       const isCur = Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
@@ -84,30 +88,42 @@ function sleep(ms) {
 }
 
 async function main() {
-  console.log('Config:', JSON.stringify({ chat_id: config.chat_id, channels: config.channels }));
-  console.log('Fetching schedule...');
-  const { date, data: schedule } = await fetchSchedule();
+  const date = todayWIB();
+  console.log(`Date: ${date}`);
+  console.log(`Chat ID: ${config.chat_id}`);
+  console.log(`Channels: ${config.channels.join(', ')}\n`);
 
   let sent = 0;
   for (const slug of config.channels) {
-    const ch = schedule.channels?.find((c) => c.slug === slug);
-    if (!ch || ch.programs.length === 0) {
-      console.log(`SKIP ${slug} (no data)`);
+    console.log(`Fetching ${slug}...`);
+    const data = await fetchChannel(slug, date);
+
+    if (!data) {
+      console.log(`  SKIP (no data)`);
       continue;
     }
 
-    const text = buildChannelMessage(date, ch);
-    console.log(`Sending ${ch.name}...`);
+    const ch = { slug, name: data.channel?.name ?? slug, programs: data.channel?.programs ?? [] };
+    console.log(`  ${ch.name}: ${ch.programs.length} programs`);
 
-    // Kirim langsung ke grup
+    if (ch.programs.length === 0) {
+      console.log(`  SKIP (0 programs)`);
+      continue;
+    }
+
+    const text = buildChannelMessage(date, data);
+
+    if (text.length > TG_MAX) {
+      console.log(`  WARN: message ${text.length} chars, trimming...`);
+    }
+
     const body = {
       chat_id: config.chat_id,
-      text,
+      text: text.slice(0, TG_MAX),
       parse_mode: 'HTML',
       disable_web_page_preview: true,
     };
 
-    // Kalau ada message_thread_id (forum topic), kirim ke situ
     if (config.message_thread_id) {
       body.message_thread_id = config.message_thread_id;
     }
@@ -116,12 +132,12 @@ async function main() {
 
     if (result.ok) {
       sent++;
-      console.log(`  OK chat_id=${config.chat_id} message_id=${result.result.message_id} chat=${JSON.stringify(result.result.chat)}`);
+      const chat = result.result?.chat;
+      console.log(`  OK → ${chat?.title ?? '?'} (${chat?.id ?? '?'}) msg_id=${result.result.message_id}`);
     } else {
-      console.log(`  FAILED: ${JSON.stringify(result)}`);
+      console.log(`  FAILED`);
     }
 
-    // Delay supaya ngga kena rate limit
     await sleep(1500);
   }
 
