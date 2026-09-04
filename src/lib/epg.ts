@@ -1,7 +1,7 @@
 import { CHANNELS, getChannel } from './channels';
 import { getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
-import { readDayFromD1, type D1Db } from './store';
+import { readDayFromD1, writeDayToD1, type D1Db } from './store';
 import { fetchAllPrograms, mergePrograms } from './sync';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
@@ -49,7 +49,7 @@ export function progress(nowMs: number, p: EpgProgram): number {
 const mem = new Map<string, { exp: number; data: DaySchedule }>();
 
 function cacheKey(kind: string, date: string): string {
-  return `https://haru-epg.internal/cache/v3/${kind}/${date}`;
+  return `https://haru-epg.internal/cache/v4/${kind}/${date}`;
 }
 
 function ttlSeconds(env: Env): number {
@@ -147,11 +147,13 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
   const cached = await readCache(key);
   if (cached) return cached;
 
-  // 1) D1 dulu (diisi cron tiap 2 jam — instan, tanpa scrape per request)
+  // 1) D1 dulu (diisi cron tiap 2 jam — instan, tanpa scrape per request).
+  //    Aturan kesegaran: tanggal lampau selalu OK (jadwal arsip), hari ini/masa depan < 12 jam.
   if (env.DB) {
     try {
       const d1 = await readDayFromD1(env.DB as D1Db, date);
-      if (d1 && d1.programs.length > 0 && Date.now() - Date.parse(d1.updatedAt) < D1_MAX_AGE_MS) {
+      const ageOk = Date.now() - Date.parse(d1?.updatedAt ?? '') < D1_MAX_AGE_MS;
+      if (d1 && d1.programs.length > 0 && (date < todayWIB() || ageOk)) {
         const result = buildDay(date, d1.programs, 'd1');
         await writeCache(key, result, ttl);
         return result;
@@ -161,8 +163,15 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
     }
   }
 
-  // 2) Fallback live: scrape provider + sheet langsung
+  // 2) Fallback live: scrape provider + sheet langsung, lalu tulis ke D1 (write-through)
   const all = await fetchAllPrograms(env, date);
+  if (env.DB && all.length > 0) {
+    try {
+      await writeDayToD1(env.DB as D1Db, date, all);
+    } catch {
+      /* cache tetap ditulis di bawah */
+    }
+  }
   const result = buildDay(date, all, 'live');
 
   await writeCache(key, result, ttl);

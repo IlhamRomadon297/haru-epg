@@ -1,5 +1,5 @@
 import { fetchAllPrograms } from '../src/lib/sync';
-import { writeDayToD1, type D1Db } from '../src/lib/store';
+import { pruneD1, writeDayToD1, type D1Db } from '../src/lib/store';
 
 interface CronEnv {
   DB: D1Db;
@@ -26,14 +26,21 @@ async function syncDate(env: CronEnv, date: string): Promise<{ date: string; cou
   return { date, count: programs.length };
 }
 
+/** Offset tanggal arsip/masa depan yang dirotasi (di luar hari ini & besok). */
+const ROTATE_OFFSETS = [-3, -2, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
 export default {
-  // Cron tiap 2 jam: refresh hari ini + besok (agar date picker instan).
+  // Cron tiap 2 jam: hari ini + besok (prioritas kesegaran) + 1 tanggal rotasi
+  // (satu putaran penuh ±24 jam mencakup arsip H-3 s/d depan H+10).
   async scheduled(_event: unknown, env: CronEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
     ctx.waitUntil(
       (async () => {
         const today = todayWIB();
         await syncDate(env, today);
         await syncDate(env, addDays(today, 1));
+        const slot = Math.floor(Date.now() / (2 * 3600 * 1000)) % ROTATE_OFFSETS.length;
+        await syncDate(env, addDays(today, ROTATE_OFFSETS[slot]));
+        await pruneD1(env.DB, addDays(today, -4), addDays(today, 11));
       })(),
     );
   },

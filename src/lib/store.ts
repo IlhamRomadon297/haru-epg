@@ -48,6 +48,15 @@ export async function readDayFromD1(
   return { programs, updatedAt };
 }
 
+/** Hapus tanggal di luar jendela retensi (arsip H-4, depan H+11). */
+export async function pruneD1(db: D1Db, minDate: string, maxDate: string): Promise<void> {
+  await db
+    .prepare(`DELETE FROM programs WHERE date < ? OR date > ?`)
+    .bind(minDate, maxDate)
+    .run()
+    .catch(() => null);
+}
+
 /** Tulis ulang seluruh jadwal 1 tanggal (DELETE + INSERT, di-chunk per 400 baris). */
 export async function writeDayToD1(db: D1Db, date: string, programs: EpgProgram[]): Promise<void> {
   const now = new Date().toISOString();

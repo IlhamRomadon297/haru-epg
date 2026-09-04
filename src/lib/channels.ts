@@ -46,7 +46,13 @@ export const CHANNELS: Channel[] = [
   { slug: 'vtv', name: 'VTV', category: 'nasional', tivieSlug: 'vtv', logo: logo('j3W5E19JVcaaKdNEVK3gss55n8pIpxE82ahs8zmn.png') },
   { slug: 'sindonews-tv', name: 'Sindonews TV', category: 'nasional', tivieSlug: 'sindonews' },
   // Pay TV — full otomatis via MNC Vision (ID numerik dari mncvision.id/schedule/table)
-  { slug: 'animax', name: 'Animax', category: 'paytv', provider: 'mncvision', providerRef: '157' },
+  // kecuali HBO & ANIPLUS yang diambil dari Singtel (epgChannelId dari tv-programme-guide)
+  { slug: 'hbo', name: 'HBO HD', category: 'paytv', provider: 'singtel', providerRef: '6420' },
+  { slug: 'hbo-signature', name: 'HBO Signature', category: 'paytv', provider: 'singtel', providerRef: '6421' },
+  { slug: 'hbo-family', name: 'HBO Family', category: 'paytv', provider: 'singtel', providerRef: '6422' },
+  { slug: 'hbo-hits', name: 'HBO Hits', category: 'paytv', provider: 'singtel', providerRef: '6423' },
+  { slug: 'aniplus', name: 'ANIPLUS HD', category: 'paytv', provider: 'singtel', providerRef: '5340' },
+  { slug: 'animax', name: 'Animax', category: 'paytv', provider: 'singtel', providerRef: '5342' },
   { slug: 'bein-sports-1', name: 'beIN Sports 1', category: 'paytv', provider: 'mncvision', providerRef: '309' },
   { slug: 'bein-sports-2', name: 'beIN Sports 2', category: 'paytv', provider: 'mncvision', providerRef: '310' },
   { slug: 'bein-sports-3', name: 'beIN Sports 3', category: 'paytv', provider: 'mncvision', providerRef: '311' },
