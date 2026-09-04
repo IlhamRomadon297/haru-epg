@@ -1,16 +1,12 @@
-name = "haru-epg"
+name = "haru-epg-cron"
+main = "cron.ts"
 compatibility_date = "2025-08-01"
 compatibility_flags = ["nodejs_compat"]
-
-pages_build_output_dir = "./dist"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "haru-epg"
 database_id = "2335eb0a-ea21-4f9f-8a73-3bcfbca5ec91"
 
-[vars]
-CACHE_TTL = "5400"
-
-[observability]
-enabled = true
+[triggers]
+crons = ["20 */2 * * *"]

@@ -4,7 +4,7 @@ import type { Provider } from './types';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HaruEPG/1.0 (+https://haru-epg.pages.dev)';
 
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#039;|&#39;|&apos;/g, "'")
     .replace(/&quot;/g, '"')

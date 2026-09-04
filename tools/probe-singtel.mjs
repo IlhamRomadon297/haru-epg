@@ -1,0 +1,10 @@
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) HaruEPG/1.0';
+const html = await (await fetch('https://www.singtel.com/personal/products-services/tv/tv-programme-guide', { headers: { 'User-Agent': UA } })).text();
+console.log('LEN', html.length);
+const epg = [...new Set([...html.matchAll(/["']([^"']*epg[^"']*)["']/gi)].map((m) => m[1]))];
+console.log('--- EPG STRINGS ---'); epg.slice(0, 25).forEach((s) => console.log(' ', s.slice(0, 240)));
+const apis = [...new Set([...html.matchAll(/["']((?:https?:)?\/\/[^"']*api[^"']*)["']/gi)].map((m) => m[1]))];
+console.log('--- API URLS ---'); apis.slice(0, 15).forEach((s) => console.log(' ', s.slice(0, 240)));
+const scripts = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map((m) => m[1]);
+console.log('--- SCRIPTS (guide-related) ---');
+scripts.filter((s) => /guide|epg|tv|schedule|app|main/i.test(s)).forEach((s) => console.log(' ', s.slice(0, 240)));

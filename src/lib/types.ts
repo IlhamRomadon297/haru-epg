@@ -41,5 +41,5 @@ export interface DaySchedule {
   channels: ChannelSchedule[];
   totalPrograms: number;
   cachedAt: string;
-  source: 'live' | 'cache' | 'fallback';
+  source: 'live' | 'cache' | 'fallback' | 'd1';
 }

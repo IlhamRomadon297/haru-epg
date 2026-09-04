@@ -1,11 +1,15 @@
 import { CHANNELS, getChannel } from './channels';
-import { fetchProviderSchedules, getProvider, providerRefOf } from './providers/index';
+import { getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
+import { readDayFromD1, type D1Db } from './store';
+import { fetchAllPrograms, mergePrograms } from './sync';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
 export const DEFAULT_TTL = 5400; // 1.5 jam
+/** D1 dianggap segar bila ditulis < 12 jam lalu (cron jalan tiap 2 jam). */
+export const D1_MAX_AGE_MS = 12 * 3600 * 1000;
 
-type Env = SheetEnv & { CACHE_TTL?: string };
+type Env = SheetEnv & { CACHE_TTL?: string; DB?: unknown };
 
 /** Tanggal hari ini dalam WIB (YYYY-MM-DD). */
 export function todayWIB(date = new Date()): string {
@@ -45,7 +49,7 @@ export function progress(nowMs: number, p: EpgProgram): number {
 const mem = new Map<string, { exp: number; data: DaySchedule }>();
 
 function cacheKey(kind: string, date: string): string {
-  return `https://haru-epg.internal/cache/v2/${kind}/${date}`;
+  return `https://haru-epg.internal/cache/v3/${kind}/${date}`;
 }
 
 function ttlSeconds(env: Env): number {
@@ -94,35 +98,8 @@ async function writeCache(key: string, data: DaySchedule, ttl: number): Promise<
   mem.set(key, { exp: Date.now() + ttl * 1000, data });
 }
 
-/** Gabung data tivie + override sheet (manual menang bila channel+start sama). */
-function mergePrograms(tivie: EpgProgram[], sheet: EpgProgram[], date: string): EpgProgram[] {
-  const byDate = sheet.filter((p) => p.date === date);
-  const overridden = new Set(byDate.map((p) => `${p.channelSlug}|${p.start}`));
-  const kept = tivie.filter((p) => !overridden.has(`${p.channelSlug}|${p.start}`));
-  return [...kept, ...byDate].sort((a, b) =>
-    a.channelSlug === b.channelSlug ? a.start.localeCompare(b.start) : a.channelSlug.localeCompare(b.channelSlug),
-  );
-}
-
-export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySchedule> {
-  const date = dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO) ? dateISO : todayWIB();
-  const ttl = ttlSeconds(env);
-  const key = cacheKey('day', date);
-
-  const cached = await readCache(key);
-  if (cached) return cached;
-
-  const fetchable = CHANNELS.filter((c) => providerRefOf(c) !== '');
-
-  // Sheet + semua provider paralel; sheet tidak boleh menggagalkan halaman
-  const [sheet, provMap] = await Promise.all([
-    fetchSheetOverrides(env, date),
-    fetchProviderSchedules(fetchable, date).catch(() => new Map<string, EpgProgram[]>()),
-  ]);
-
-  const flatFetched = [...provMap.values()].flat();
-  const all = mergePrograms(flatFetched, sheet, date);
-
+/** Bangun DaySchedule dari daftar program mentah (dipakai jalur D1 & live). */
+function buildDay(date: string, all: EpgProgram[], source: DaySchedule['source']): DaySchedule {
   const nowMs = Date.now();
   const channels: ChannelSchedule[] = CHANNELS.map((c) => {
     const programs = all
@@ -157,10 +134,37 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
     channels,
     totalPrograms: all.filter((p) => p.date === date).length,
     cachedAt: new Date().toISOString(),
-    source: 'live',
+    source,
   };
+  return result;
+}
 
-  // Jangan cache tanggal lampau/datang terlalu lama? tetap cache singkat agar hemat.
+export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySchedule> {
+  const date = dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO) ? dateISO : todayWIB();
+  const ttl = ttlSeconds(env);
+  const key = cacheKey('day', date);
+
+  const cached = await readCache(key);
+  if (cached) return cached;
+
+  // 1) D1 dulu (diisi cron tiap 2 jam — instan, tanpa scrape per request)
+  if (env.DB) {
+    try {
+      const d1 = await readDayFromD1(env.DB as D1Db, date);
+      if (d1 && d1.programs.length > 0 && Date.now() - Date.parse(d1.updatedAt) < D1_MAX_AGE_MS) {
+        const result = buildDay(date, d1.programs, 'd1');
+        await writeCache(key, result, ttl);
+        return result;
+      }
+    } catch {
+      /* jatuh ke live */
+    }
+  }
+
+  // 2) Fallback live: scrape provider + sheet langsung
+  const all = await fetchAllPrograms(env, date);
+  const result = buildDay(date, all, 'live');
+
   await writeCache(key, result, ttl);
   return result;
 }
