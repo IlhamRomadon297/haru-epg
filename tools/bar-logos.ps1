@@ -3,8 +3,8 @@ $dir = 'D:\All Project\Proyek Web\haru-epg\public\logos'
 $bar = [System.Drawing.Color]::FromArgb(7, 43, 196)
 # File yg SUDAH ber-bar bawaan playlist → jangan disentuh
 $keepers = @('animax','aniplus','antv','axn','gtv','hbo','hbo-family','hbo-hits','hbo-signature',
-  'hits-movies','inews','kompastv','metrotv','mnctv','rcti','rock-action','rock-entertainment',
-  'rtv','sctv','trans7','transtv','tvn','tvn-movies','tvone','tvri')
+  'hits-movies','inews','kompas-tv','metro-tv','mnctv','rcti','rock-action','rock-entertainment',
+  'rtv','sctv','trans7','trans-tv','tvn','tvn-movies','tvone','tvri')
 $labels = @{
   'abc-australia' = 'ABC AUSTRALIA'; 'al-jazeera' = 'AL JAZEERA'; 'arirang' = 'ARIRANG'
   'bbc-news' = 'BBC NEWS'; 'bein-sports-1' = 'BEIN SPORTS 1'; 'bein-sports-2' = 'BEIN SPORTS 2'
@@ -17,12 +17,38 @@ $labels = @{
   'sinpo-tv' = 'SIN PO TV'; 'spotv' = 'SPOTV'; 'spotv-2' = 'SPOTV 2'
   'studio-universal' = 'STUDIO UNIVERSAL'; 'vtv' = 'VTV'
 }
-$n = 0
+$n = 0; $k = 0
 foreach ($f in Get-ChildItem $dir -Filter *.png | Sort-Object Name) {
   $slug = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
-  if ($keepers -contains $slug) { continue }
+  if ($keepers -contains $slug) { $k++; continue }
   if (-not $labels.ContainsKey($slug)) { Write-Output "SKIP (no label) $slug"; continue }
-  $src = New-Object System.Drawing.Bitmap($f.FullName)
+  $raw = New-Object System.Drawing.Bitmap($f.FullName)
+  # 1) normalisasi ke kanvas putih 500x500 (contain) — apapun ukuran/format sumber
+  $norm = New-Object System.Drawing.Bitmap(500, 500)
+  $gn = [System.Drawing.Graphics]::FromImage($norm)
+  $gn.InterpolationMode = 'HighQualityBicubic'
+  $gn.Clear([System.Drawing.Color]::White)
+  $sn = [Math]::Min(500 / $raw.Width, 500 / $raw.Height)
+  $nw, $nh = [int]($raw.Width * $sn), [int]($raw.Height * $sn)
+  $gn.DrawImage($raw, [int]((500 - $nw) / 2), [int]((500 - $nh) / 2), $nw, $nh)
+  $gn.Dispose(); $raw.Dispose()
+  # 2) deteksi bar bawaan pada citra yg sudah dinormalisasi
+  $hits = 0; $tot = 0
+  foreach ($px in @(30, 100, 400, 470)) {
+    foreach ($py in @(420, 460, 485)) {
+      $tot++
+      $c = $norm.GetPixel($px, $py)
+      if ($c.B -gt 100 -and $c.R -lt 110 -and $c.B -gt $c.R + 40) { $hits++ }
+    }
+  }
+  if (($hits / $tot) -ge 0.5) {
+    $norm.Save($f.FullName, [System.Drawing.Imaging.ImageFormat]::Png)
+    $norm.Dispose()
+    Write-Output "KEEP (bar bawaan) $slug"; $k++
+    continue
+  }
+  # 3) komposit: art di area atas + bar biru + label putih
+  $src = $norm
   $out = New-Object System.Drawing.Bitmap(500, 500)
   $g = [System.Drawing.Graphics]::FromImage($out)
   $g.SmoothingMode = 'AntiAlias'
