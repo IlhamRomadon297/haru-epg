@@ -7,7 +7,7 @@ import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
 export const DEFAULT_TTL = 5400; // 1.5 jam
 /** D1 dianggap segar bila ditulis < 12 jam lalu (cron jalan tiap jam). */
-export const D1_MAX_AGE_MS = 0;
+export const D1_MAX_AGE_MS = 6 * 60 * 60 * 1000;  // 6 jam
 
 type Env = SheetEnv & { CACHE_TTL?: string; DB?: unknown };
 
