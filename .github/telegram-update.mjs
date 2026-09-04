@@ -62,7 +62,7 @@ function buildChannelMessage(date, ch) {
   }
 
   lines.push('');
-  lines.push(`<a href="https://haru-epg.pages.dev/channel/${ch.slug}">Jadwal Selengkapnya: haru-epg.pages.dev</a>`);
+  lines.push(`Jadwal Selengkapnya: <a href="https://haru-epg.pages.dev/channel/${ch.slug}">haru-epg.pages.dev</a>`);
   return lines.join('\n');
 }
 
@@ -98,17 +98,13 @@ async function main() {
     const text = buildChannelMessage(date, ch);
     console.log(`Sending ${ch.name}...`);
 
+    // Kirim langsung ke grup
     const body = {
       chat_id: config.chat_id,
       text,
       parse_mode: 'HTML',
       disable_web_page_preview: true,
     };
-
-    // Kalau ada reply_to_message_id, reply ke itu
-    if (config.reply_to_message_id) {
-      body.reply_to_message_id = config.reply_to_message_id;
-    }
 
     // Kalau ada message_thread_id (forum topic), kirim ke situ
     if (config.message_thread_id) {
