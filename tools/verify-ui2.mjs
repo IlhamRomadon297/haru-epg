@@ -3,7 +3,8 @@ const home = await (await fetch(base + '/?date=2026-09-04', { headers: { 'User-A
 const title = home.match(/<title>(.*?)<\/title>/)?.[1];
 console.log('title:', title, '| pakai |:', title?.includes('|') && !title?.includes('—') ? 'OK' : 'FAIL');
 console.log('logo.png ref:', home.includes('/logo.png') ? 'OK' : 'FAIL');
-const logo = await (await fetch(base + '/logo.png')).then((r) => ({ st: r.status, ct: r.headers.get('content-type'), len: (await r.arrayBuffer()).byteLength }));
+const logoRes = await fetch(base + '/logo.png');
+const logo = { st: logoRes.status, ct: logoRes.headers.get('content-type'), len: (await logoRes.arrayBuffer()).byteLength };
 console.log('logo.png served:', logo.st === 200 && logo.ct?.includes('png') && logo.len > 10000 ? `OK (${logo.len}b)` : `FAIL ${JSON.stringify(logo)}`);
 const cssHref = home.match(/<link[^>]+rel="stylesheet"[^>]*>/)?.[0].match(/href="([^"]+)"/)?.[1];
 const css = await (await fetch(base + cssHref)).text();
