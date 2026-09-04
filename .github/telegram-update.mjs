@@ -44,30 +44,48 @@ function formatTime(iso) {
   return iso?.slice(11, 16) ?? '??:??';
 }
 
-function buildChannelMessage(date, ch) {
-  const lines = [];
-  lines.push(`<b>📺 ${ch.name}</b>`);
-  lines.push(`<i>${prettyDate(date)}</i>`);
-  lines.push('');
-
+function buildMessages(date, slug, channelName, programs) {
   const nowMs = Date.now();
-  const programs = ch.channel?.programs ?? ch.programs ?? [];
+  const header = `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n`;
+  const footer = `\n<a href="https://haru-epg.pages.dev/channel/${slug}">🌐 haru-epg.pages.dev</a>`;
 
   if (programs.length === 0) {
-    lines.push(`Jadwal tidak tersedia`);
-  } else {
-    for (const p of programs) {
-      const s = Date.parse(p.start);
-      const e = Date.parse(p.end);
-      const isCur = Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
-      const icon = isCur ? '🔴' : '•';
-      lines.push(`${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`);
-    }
+    return [header + '\nJadwal tidak tersedia' + footer];
   }
 
-  lines.push('');
-  lines.push(`Jadwal Selengkapnya: <a href="https://haru-epg.pages.dev/channel/${ch.slug}">haru-epg.pages.dev</a>`);
-  return lines.join('\n');
+  const programLines = programs.map((p) => {
+    const s = Date.parse(p.start);
+    const e = Date.parse(p.end);
+    const isCur = Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
+    const icon = isCur ? '🔴' : '•';
+    return `${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`;
+  });
+
+  const fullText = header + '\n' + programLines.join('\n') + footer;
+
+  if (fullText.length <= TG_MAX) {
+    return [fullText];
+  }
+
+  const chunks = [];
+  let currentChunk = header + '\n';
+  let partNum = 1;
+
+  for (const line of programLines) {
+    const testChunk = currentChunk + line + '\n' + footer;
+    if (testChunk.length > TG_MAX - 20) {
+      currentChunk += `\n➡️ <i>lanjut part ${partNum + 1}...</i>`;
+      chunks.push(currentChunk.trim());
+      partNum++;
+      currentChunk = `<b>📺 ${channelName}</b> (part ${partNum})\n<i>${prettyDate(date)}</i>\n\n`;
+    }
+    currentChunk += line + '\n';
+  }
+
+  currentChunk += '\n' + footer;
+  chunks.push(currentChunk.trim());
+
+  return chunks;
 }
 
 async function telegram(method, body) {
@@ -98,12 +116,12 @@ async function main() {
     console.log(`Fetching ${slug}...`);
     const data = await fetchChannel(slug, date);
 
-    if (!data) {
+    if (!data?.channel) {
       console.log(`  SKIP (no data)`);
       continue;
     }
 
-    const ch = { slug, name: data.channel?.name ?? slug, programs: data.channel?.programs ?? [] };
+    const ch = data.channel;
     console.log(`  ${ch.name}: ${ch.programs.length} programs`);
 
     if (ch.programs.length === 0) {
@@ -111,37 +129,38 @@ async function main() {
       continue;
     }
 
-    const text = buildChannelMessage(date, data);
+    const messages = buildMessages(date, slug, ch.name, ch.programs);
+    console.log(`  → ${messages.length} message(s), sizes: ${messages.map((m) => m.length).join(', ')}`);
 
-    if (text.length > TG_MAX) {
-      console.log(`  WARN: message ${text.length} chars, trimming...`);
+    for (let i = 0; i < messages.length; i++) {
+      const body = {
+        chat_id: config.chat_id,
+        text: messages[i],
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      };
+
+      if (config.message_thread_id) {
+        body.message_thread_id = config.message_thread_id;
+      }
+
+      const result = await telegram('sendMessage', body);
+
+      if (result.ok) {
+        const chat = result.result?.chat;
+        console.log(`  OK [${i + 1}/${messages.length}] → ${chat?.title ?? '?'} (${chat?.id ?? '?'})`);
+      } else {
+        console.log(`  FAILED [${i + 1}/${messages.length}]`);
+      }
+
+      if (i < messages.length - 1) await sleep(500);
     }
 
-    const body = {
-      chat_id: config.chat_id,
-      text: text.slice(0, TG_MAX),
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-    };
-
-    if (config.message_thread_id) {
-      body.message_thread_id = config.message_thread_id;
-    }
-
-    const result = await telegram('sendMessage', body);
-
-    if (result.ok) {
-      sent++;
-      const chat = result.result?.chat;
-      console.log(`  OK → ${chat?.title ?? '?'} (${chat?.id ?? '?'}) msg_id=${result.result.message_id}`);
-    } else {
-      console.log(`  FAILED`);
-    }
-
+    sent++;
     await sleep(1500);
   }
 
-  console.log(`\nDone: ${sent}/${config.channels.length} messages sent`);
+  console.log(`\nDone: ${sent}/${config.channels.length} channels sent`);
 }
 
 main().catch((e) => {
