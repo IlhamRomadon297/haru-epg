@@ -3,7 +3,7 @@ interface Props {
   title?: string;
   description?: string;
 }
-const { title = 'Haru EPG — Jadwal TV Indonesia', description = 'Jadwal acara TV nasional, pay TV, dan internasional. Lengkap dengan status LIVE.' } = Astro.props;
+const { title = 'Haru EPG | Jadwal TV Indonesia', description = 'Jadwal acara TV nasional, pay TV, dan internasional. Lengkap dengan status LIVE.' } = Astro.props;
 const q = Astro.url.searchParams.get('q') ?? '';
 ---
 <!doctype html>
@@ -13,7 +13,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
+    <link rel="icon" type="image/png" href="/logo.png" />
     <script is:inline>
       try {
         const t = localStorage.getItem('haru-theme');
@@ -138,7 +138,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
       .chip { text-decoration: none; font-size: 0.8rem; font-weight: 700; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
       .chip.active, .chip:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
-      footer.site { margin: 34px 0 26px; }
+      footer.site { margin: 34px auto 26px; }
       footer.site .foot-card {
         margin: 0; width: 100%; text-align: center;
         background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
@@ -184,7 +184,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
     <header class="top">
       <div class="wrap top-inner">
         <a class="logo" href="/">
-          <span class="logo-mark"><img src="/logo.svg" alt="Haru EPG" width="34" height="34" /></span>
+          <span class="logo-mark"><img src="/logo.png" alt="Haru EPG" width="34" height="34" /></span>
           <span>Haru EPG<small>JADWAL TV INDONESIA</small></span>
         </a>
         <nav class="main">
@@ -215,7 +215,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
     <footer class="site wrap">
       <div class="foot-card">
         <div class="foot-brand">
-          <img src="/logo.svg" alt="Haru EPG" width="30" height="30" />
+          <img src="/logo.png" alt="Haru EPG" width="30" height="30" />
           <strong>Haru EPG</strong>
         </div>
         <p class="foot-tag">Panduan acara TV Indonesia — nasional, pay TV, dan internasional.</p>

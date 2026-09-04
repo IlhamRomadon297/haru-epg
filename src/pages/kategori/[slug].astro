@@ -20,7 +20,7 @@ const nowMs = Date.now();
 const schedBySlug = new Map((day?.channels ?? []).map((c) => [c.slug, c]));
 ---
 
-<Layout title={`${meta.name} — Haru EPG`} description={meta.description}>
+<Layout title={`${meta.name} | Haru EPG`} description={meta.description}>
   <section class="hero">
     <h1>{meta.name}</h1>
     <p>{meta.description} · {day?.label ?? date}</p>

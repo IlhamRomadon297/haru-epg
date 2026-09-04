@@ -19,7 +19,7 @@ const { channel, label } = result;
 const nowMs = Date.now();
 ---
 
-<Layout title={`Jadwal ${channel.name} Hari Ini — Haru EPG`} description={`Jadwal acara ${channel.name} ${label}, lengkap dengan status LIVE.`}>
+<Layout title={`Jadwal ${channel.name} Hari Ini | Haru EPG`} description={`Jadwal acara ${channel.name} ${label}, lengkap dengan status LIVE.`}>
   <section class="hero">
     <div style="display:flex;gap:14px;align-items:center">
       <span class="avatar" style="width:58px;height:58px;background:rgba(255,255,255,.9)">{channel.name.slice(0, 2)}{channel.logo && <img src={channel.logo} alt={channel.name} onerror="this.remove()" />}</span>

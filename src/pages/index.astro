@@ -25,7 +25,7 @@ const nowMs = Date.now();
 const liveCount = channels.filter((c) => c.now).length;
 ---
 
-<Layout title={`Haru EPG — Jadwal TV Hari Ini (${day.label})`}>
+<Layout title={`Haru EPG | Jadwal TV Hari Ini (${day.label})`}>
   <section class="hero">
     <h1>📺 Jadwal TV Hari Ini</h1>
     <p>{day.label} · {channels.length} channel · {day.totalPrograms} acara · sumber cache {day.source === 'cache' ? '⚡ instan' : '🔄 live'}</p>

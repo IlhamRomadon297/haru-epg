@@ -24,7 +24,7 @@ const live = prog ? isLive(nowMs, prog) : false;
 const ch = prog ? getChannel(prog.channelSlug) : undefined;
 ---
 
-<Layout title={prog ? `${prog.title} — ${prog.channelName} — Haru EPG` : 'Acara tidak ditemukan — Haru EPG'}>
+<Layout title={prog ? `${prog.title} | ${prog.channelName} | Haru EPG` : 'Acara tidak ditemukan | Haru EPG'}>
   {!prog ? (
     <div class="card empty">
       <h3>Acara tidak ditemukan 😢</h3>
