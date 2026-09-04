@@ -1,53 +1,108 @@
 Add-Type -AssemblyName System.Drawing
-$dir = 'D:\All Project\Proyek Web\haru-epg\public\logos'
+$d = 'D:\All Project\Proyek Web\haru-epg\public\logos'
 $n = 0
-foreach ($f in Get-ChildItem $dir -Filter *.png) {
+
+foreach ($f in (Get-ChildItem $d -Filter *.png | Sort-Object Name)) {
+  $slug = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
   $raw = New-Object System.Drawing.Bitmap($f.FullName)
-  # 1) Normalisasi ke kanvas putih 500x500 (contain)
-  $norm = New-Object System.Drawing.Bitmap(500, 500)
-  $gn = [System.Drawing.Graphics]::FromImage($norm)
-  $gn.InterpolationMode = 'HighQualityBicubic'
-  $gn.Clear([System.Drawing.Color]::White)
-  $sn = [Math]::Min(500 / $raw.Width, 500 / $raw.Height)
-  $nw, $nh = [int]($raw.Width * $sn), [int]($raw.Height * $sn)
-  $gn.DrawImage($raw, [int]((500 - $nw) / 2), [int]((500 - $nh) / 2), $nw, $nh)
-  $gn.Dispose(); $raw.Dispose()
-  # 2) Deteksi bar biru: scan dari bawah ke atas, cari baris dominan biru
-  $barTop = -1
-  for ($y = 499; $y -ge 100; $y--) {
-    $bluePx = 0; $totPx = 0
-    foreach ($x in @(20, 100, 250, 400, 480)) {
-      $totPx++
-      $c = $norm.GetPixel($x, $y)
-      if ($c.B -gt 100 -and $c.R -lt 120 -and $c.B -gt $c.R + 30) { $bluePx++ }
+  
+  # Step 1: Find content bounds (non-white pixels)
+  $minY = $raw.Height; $maxY = 0
+  for ($y = 0; $y -lt $raw.Height; $y++) {
+    $hasContent = $false
+    for ($x = 0; $x -lt $raw.Width; $x += 3) {
+      $c = $raw.GetPixel($x, $y)
+      if ($c.A -gt 10 -and ($c.R -lt 230 -or $c.G -lt 230 -or $c.B -lt 230)) {
+        $hasContent = $true; break
+      }
     }
-    if (($bluePx / $totPx) -lt 0.4) {
-      $barTop = $y + 1
-      break
+    if ($hasContent) {
+      if ($y -lt $minY) { $minY = $y }
+      if ($y -gt $maxY) { $maxY = $y }
     }
   }
-  if ($barTop -lt 0) { $barTop = 390 }  # fallback
-  # 3) Crop: ambil area di atas bar biru (atau seluruh gambar jika tidak ada bar)
-  $cropH = [Math]::Min($barTop, 500)
-  $crop = New-Object System.Drawing.Bitmap(500, $cropH)
-  $gc = [System.Drawing.Graphics]::FromImage($crop)
-  $gc.InterpolationMode = 'HighQualityBicubic'
-  $gc.Clear([System.Drawing.Color]::White)
-  $gc.DrawImage($norm, 0, 0, 500, $cropH)
-  $gc.Dispose()
-  $norm.Dispose()
-  # 4) Scale crop ke 500x500 canvas (contain, center)
+  
+  if ($minY -ge $raw.Height) {
+    # All white — skip
+    $raw.Dispose()
+    Write-Output "SKIP $slug (all white)"
+    continue
+  }
+  
+  # Step 2: Detect blue bar in the region below content (maxY+1 to bottom)
+  $barStart = -1; $barEnd = -1
+  $contentBottom = $maxY + 1
+  for ($y = $contentBottom; $y -lt $raw.Height; $y++) {
+    $bluePx = 0; $totPx = 0
+    for ($x = 0; $x -lt $raw.Width; $x += [Math]::Max(1, [int]($raw.Width / 20))) {
+      $totPx++
+      $c = $raw.GetPixel($x, $y)
+      # Blue bar: deep blue (R<50, G<100, B>140)
+      if ($c.R -lt 50 -and $c.G -lt 100 -and $c.B -gt 140) { $bluePx++ }
+    }
+    if ($totPx -gt 0 -and ($bluePx / $totPx) -ge 0.5) {
+      if ($barStart -lt 0) { $barStart = $y }
+      $barEnd = $y
+    }
+  }
+  
+  # Also check for blue bar WITHIN the content area (bar overlaps logo)
+  # Scan from bottom of content upward
+  if ($barStart -lt 0) {
+    for ($y = $maxY; $y -ge [Math]::Max(0, $maxY - 150); $y--) {
+      $bluePx = 0; $totPx = 0
+      for ($x = 0; $x -lt $raw.Width; $x += [Math]::Max(1, [int]($raw.Width / 20))) {
+        $totPx++
+        $c = $raw.GetPixel($x, $y)
+        if ($c.R -lt 50 -and $c.G -lt 100 -and $c.B -gt 140) { $bluePx++ }
+      }
+      if ($totPx -gt 0 -and ($bluePx / $totPx) -ge 0.6) {
+        if ($barEnd -lt 0) { $barEnd = $y }
+        $barStart = $y
+      } elseif ($barEnd -ge 0) {
+        break  # Found bottom of bar, now found top
+      }
+    }
+  }
+  
+  # Step 3: Determine crop region
+  $cropTop = [Math]::Max(0, $minY - 5)  # Small padding above
+  $cropBot = $maxY + 1  # Default: include all content
+  
+  if ($barStart -ge 0 -and $barEnd -ge 0) {
+    # Bar found — crop just above the bar
+    $cropBot = [Math]::Max($barStart - 1, $cropTop)
+    Write-Output "BAR  $slug (bar y=$barStart-$barEnd, content y=$minY-$maxY, crop=$cropTop-$cropBot)"
+  } else {
+    Write-Output "NOBAR $slug (content y=$minY-$maxY)"
+  }
+  
+  # Step 4: Crop and scale to 500x500 on white canvas
+  $cropH = $cropBot - $cropTop
+  if ($cropH -lt 10) { $cropH = $maxY - $cropTop + 1 }  # Fallback
+  
   $out = New-Object System.Drawing.Bitmap(500, 500)
-  $go = [System.Drawing.Graphics]::FromImage($out)
-  $go.InterpolationMode = 'HighQualityBicubic'
-  $go.Clear([System.Drawing.Color]::White)
-  $so = [Math]::Min(480 / $crop.Width, 480 / $crop.Height)
-  $dw, $dh = [int]($crop.Width * $so), [int]($crop.Height * $so)
-  $go.DrawImage($crop, [int]((500 - $dw) / 2), [int]((500 - $dh) / 2), $dw, $dh)
-  $go.Dispose(); $crop.Dispose()
+  $g = [System.Drawing.Graphics]::FromImage($out)
+  $g.InterpolationMode = 'HighQualityBicubic'
+  $g.CompositingQuality = 'HighQuality'
+  $g.Clear([System.Drawing.Color]::White)
+  
+  # Scale to fit 460x460 (leaving 20px padding each side)
+  $s = [Math]::Min(460 / [Math]::Max($raw.Width, 1), 460 / [Math]::Max($cropH, 1))
+  $dw = [int]($raw.Width * $s)
+  $dh = [int]($cropH * $s)
+  $dx = [int]((500 - $dw) / 2)
+  $dy = [int]((500 - $dh) / 2)
+  
+  # DrawImage with source crop rect
+  $srcRect = New-Object System.Drawing.Rectangle(0, $cropTop, $raw.Width, $cropH)
+  $dstRect = New-Object System.Drawing.Rectangle($dx, $dy, $dw, $dh)
+  $g.DrawImage($raw, $dstRect, $srcRect, [System.Drawing.GraphicsUnit]::Pixel)
+  $g.Dispose(); $raw.Dispose()
+  
   $out.Save($f.FullName, [System.Drawing.Imaging.ImageFormat]::Png)
   $out.Dispose()
   $n++
-  Write-Output "STRIP $($f.Name) (bar at y=$barTop)"
 }
-Write-Output "TOTAL: $n logos stripped"
+
+Write-Output "`nTOTAL: $n logos processed"
