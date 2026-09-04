@@ -83,9 +83,61 @@ export const CHANNELS: Channel[] = [
   { slug: 'bloomberg', name: 'Bloomberg', category: 'internasional', provider: 'mncvision', providerRef: '338', logo: '/logos/bloomberg.png' },
   { slug: 'cnbc', name: 'CNBC', category: 'internasional', provider: 'mncvision', providerRef: '337', logo: '/logos/cnbc.png' },
   { slug: 'cgtn', name: 'CGTN', category: 'internasional', provider: 'mncvision', providerRef: '353', logo: '/logos/cgtn.png' },
-  // Contoh channel dari provider lain — aktifkan setelah provider diimplementasikan
-  // (lihat src/lib/providers/*.ts):
-  // { slug: 'rcti-vidio', name: 'RCTI (Vidio)', category: 'nasional', provider: 'vidio', providerRef: '665' },
+  { slug: 'fox-news', name: 'FOX News', category: 'internasional', provider: 'mncvision', providerRef: '335', logo: '/logos/fox-news.png' },
+  { slug: 'nhk-premium', name: 'NHK World Premium', category: 'internasional', provider: 'mncvision', providerRef: '354', logo: '/logos/nhk-premium.png' },
+  { slug: 'sea-today', name: 'SEA TODAY', category: 'internasional', provider: 'mncvision', providerRef: '336', logo: '/logos/sea-today.png' },
+  // Nasional tambahan (FTA / terestrial)
+  { slug: 'al-quran', name: 'Al Quran Al Kareem', category: 'nasional', provider: 'mncvision', providerRef: '93', logo: '/logos/al-quran.png' },
+  { slug: 'hanacaraka-tv', name: 'Hanacaraka TV', category: 'nasional', provider: 'mncvision', providerRef: '90', logo: '/logos/hanacaraka-tv.png' },
+  { slug: 'idx', name: 'IDX', category: 'nasional', provider: 'mncvision', providerRef: '100', logo: '/logos/idx.png' },
+  { slug: 'jaktv', name: 'JAKTV', category: 'nasional', provider: 'mncvision', providerRef: '113', logo: '/logos/jaktv.png' },
+  { slug: 'muslim-tv', name: 'Muslim TV', category: 'nasional', provider: 'mncvision', providerRef: '92', logo: '/logos/muslim-tv.png' },
+  { slug: 'tawaf-tv', name: 'Tawaf TV', category: 'nasional', provider: 'mncvision', providerRef: '105', logo: '/logos/tawaf-tv.png' },
+  // Pay TV — Movies
+  { slug: 'cineedge', name: 'CINEEDGE', category: 'paytv', provider: 'mncvision', providerRef: '8', logo: '/logos/cineedge.png' },
+  { slug: 'dreamworks', name: 'Dreamworks', category: 'paytv', provider: 'mncvision', providerRef: '47', logo: '/logos/dreamworks.png' },
+  { slug: 'galaxy', name: 'Galaxy', category: 'paytv', provider: 'mncvision', providerRef: '13', logo: '/logos/galaxy.png' },
+  { slug: 'galaxy-premium', name: 'Galaxy Premium', category: 'paytv', provider: 'mncvision', providerRef: '12', logo: '/logos/galaxy-premium.png' },
+  { slug: 'thrill', name: 'Thrill', category: 'paytv', provider: 'mncvision', providerRef: '19', logo: '/logos/thrill.png' },
+  { slug: 'zee-bioskop', name: 'Zee Bioskop', category: 'paytv', provider: 'mncvision', providerRef: '23', logo: '/logos/zee-bioskop.png' },
+  // Pay TV — Kids
+  { slug: 'buddy-stars', name: 'BUDDY STARS', category: 'paytv', provider: 'mncvision', providerRef: '9', logo: '/logos/buddy-stars.png' },
+  { slug: 'cbeebies', name: 'CBeebies', category: 'paytv', provider: 'mncvision', providerRef: '41', logo: '/logos/cbeebies.png' },
+  { slug: 'kids-tv', name: 'Kids TV', category: 'paytv', provider: 'mncvision', providerRef: '46', logo: '/logos/kids-tv.png' },
+  { slug: 'moonbug', name: 'Moonbug', category: 'paytv', provider: 'mncvision', providerRef: '40', logo: '/logos/moonbug.png' },
+  { slug: 'nickelodeon', name: 'Nickelodeon', category: 'paytv', provider: 'mncvision', providerRef: '49', logo: '/logos/nickelodeon.png' },
+  { slug: 'nickelodeon-jr', name: 'Nickelodeon Jr', category: 'paytv', provider: 'mncvision', providerRef: '37', logo: '/logos/nickelodeon-jr.png' },
+  { slug: 'zoomoo', name: 'Zoomoo', category: 'paytv', provider: 'mncvision', providerRef: '39', logo: '/logos/zoomoo.png' },
+  // Pay TV — Entertainment
+  { slug: 'celebrities-tv', name: 'Celebrities TV', category: 'paytv', provider: 'mncvision', providerRef: '96', logo: '/logos/celebrities-tv.png' },
+  { slug: 'ccm', name: 'CCM', category: 'paytv', provider: 'mncvision', providerRef: '22', logo: '/logos/ccm.png' },
+  { slug: 'entertainment', name: 'Entertainment', category: 'paytv', provider: 'mncvision', providerRef: '86', logo: '/logos/entertainment.png' },
+  { slug: 'imc', name: 'IMC', category: 'paytv', provider: 'mncvision', providerRef: '14', logo: '/logos/imc.png' },
+  { slug: 'life', name: 'LIFE', category: 'paytv', provider: 'mncvision', providerRef: '91', logo: '/logos/life.png' },
+  { slug: 'lifetime', name: 'Lifetime', category: 'paytv', provider: 'mncvision', providerRef: '167', logo: '/logos/lifetime.png' },
+  { slug: 'one', name: 'ONE', category: 'paytv', provider: 'mncvision', providerRef: '164', logo: '/logos/one.png' },
+  { slug: 'originals', name: 'ORIGINALS', category: 'paytv', provider: 'mncvision', providerRef: '7', logo: '/logos/originals.png' },
+  { slug: 'superrix', name: 'Superrix', category: 'paytv', provider: 'mncvision', providerRef: '10', logo: '/logos/superrix.png' },
+  { slug: 'uniques', name: 'UNIQUES', category: 'paytv', provider: 'mncvision', providerRef: '6', logo: '/logos/uniques.png' },
+  { slug: 'vision-prime', name: 'Vision Prime', category: 'paytv', provider: 'mncvision', providerRef: '94', logo: '/logos/vision-prime.png' },
+  // Pay TV — Sports
+  { slug: 'fight-sports', name: 'Fight Sports', category: 'paytv', provider: 'mncvision', providerRef: '304', logo: '/logos/fight-sports.png' },
+  { slug: 'soccer-channel', name: 'Soccer Channel', category: 'paytv', provider: 'mncvision', providerRef: '101', logo: '/logos/soccer-channel.png' },
+  { slug: 'sportstars', name: 'Sportstars', category: 'paytv', provider: 'mncvision', providerRef: '102', logo: '/logos/sportstars.png' },
+  { slug: 'sportstars-2', name: 'Sportstars 2', category: 'paytv', provider: 'mncvision', providerRef: '98', logo: '/logos/sportstars-2.png' },
+  { slug: 'sportstars-3', name: 'Sportstars 3', category: 'paytv', provider: 'mncvision', providerRef: '99', logo: '/logos/sportstars-3.png' },
+  { slug: 'sportstars-4', name: 'Sportstars 4', category: 'paytv', provider: 'mncvision', providerRef: '88', logo: '/logos/sportstars-4.png' },
+  { slug: 'hits', name: 'HITS', category: 'paytv', provider: 'mncvision', providerRef: '160', logo: '/logos/hits.png' },
+  // Pay TV — Knowledge / Documentaries
+  { slug: 'bbc-earth', name: 'BBC Earth', category: 'paytv', provider: 'mncvision', providerRef: '200', logo: '/logos/bbc-earth.png' },
+  { slug: 'cgtn-documentary', name: 'CGTN Documentary', category: 'paytv', provider: 'mncvision', providerRef: '205', logo: '/logos/cgtn-documentary.png' },
+  { slug: 'crime-investigation', name: 'Crime Investigation', category: 'paytv', provider: 'mncvision', providerRef: '207', logo: '/logos/crime-investigation.png' },
+  { slug: 'global-trekker', name: 'Global Trekker', category: 'paytv', provider: 'mncvision', providerRef: '201', logo: '/logos/global-trekker.png' },
+  { slug: 'history', name: 'History', category: 'paytv', provider: 'mncvision', providerRef: '206', logo: '/logos/history.png' },
+  { slug: 'love-nature', name: 'Love Nature', category: 'paytv', provider: 'mncvision', providerRef: '204', logo: '/logos/love-nature.png' },
+  { slug: 'outdoor-channel', name: 'Outdoor Channel', category: 'paytv', provider: 'mncvision', providerRef: '202', logo: '/logos/outdoor-channel.png' },
+  // Pay TV — Music
+  { slug: 'music-tv', name: 'Music TV', category: 'paytv', provider: 'mncvision', providerRef: '111', logo: '/logos/music-tv.png' },
 ];
 
 export const CATEGORIES: { slug: Category; name: string; description: string }[] = [

@@ -77,19 +77,24 @@ const liveCount = channels.filter((c) => c.now).length;
               </div>
             )}
             <ul class="timeline">
-              {ch.programs.slice(0, 8).map((p) => {
-                const cur = isLive(nowMs, p);
-                return (
-                  <li class={cur ? 'current' : ''}>
-                    <span class="t-time">{p.startLabel.replace(' WIB','')}</span>
-                    <div class="t-title">
-                      {cur && <span class="live-badge" style="font-size:.62rem">LIVE</span>}
-                      <a href={`/program/${p.slug}?date=${day.date}`}>{p.title}</a>
-                      {p.description && <div class="t-desc">{p.description}</div>}
-                    </div>
-                  </li>
-                );
-              })}
+              {(() => {
+                const liveIdx = ch.programs.findIndex((p) => isLive(nowMs, p));
+                const startIdx = liveIdx >= 0 ? liveIdx : ch.programs.findIndex((p) => Date.parse(p.start) > nowMs);
+                const visible = ch.programs.slice(Math.max(0, startIdx), Math.max(0, startIdx) + 8);
+                return visible.map((p) => {
+                  const cur = isLive(nowMs, p);
+                  return (
+                    <li class={cur ? 'current' : ''}>
+                      <span class="t-time">{p.startLabel.replace(' WIB','')}</span>
+                      <div class="t-title">
+                        {cur && <span class="live-badge" style="font-size:.62rem">LIVE</span>}
+                        <a href={`/program/${p.slug}?date=${day.date}`}>{p.title}</a>
+                        {p.description && <div class="t-desc">{p.description}</div>}
+                      </div>
+                    </li>
+                  );
+                });
+              })()}
             </ul>
             <div style="padding:0 14px 14px">
               <a class="btn" style="display:block;text-align:center;text-decoration:none" href={`/channel/${ch.slug}?date=${day.date}`}>Jadwal lengkap →</a>
