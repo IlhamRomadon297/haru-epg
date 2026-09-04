@@ -117,7 +117,7 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
 
   // Sheet + tivie paralel; sheet tidak boleh menggagalkan halaman
   const [sheet, tivieMap] = await Promise.all([
-    fetchSheetOverrides(env),
+    fetchSheetOverrides(env, date),
     fetchManyChannels(
       withTivie.map((c) => c.tivieSlug!),
       datePath,
@@ -194,7 +194,7 @@ export async function getChannelSchedule(
       programs = [];
     }
   }
-  const sheet = await fetchSheetOverrides(env);
+  const sheet = await fetchSheetOverrides(env, date);
   programs = mergePrograms(programs, sheet, date).filter((p) => p.channelSlug === ch.slug);
   const nowMs = Date.now();
   return {

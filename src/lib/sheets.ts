@@ -42,7 +42,7 @@ function parseGviz(jsonText: string): unknown[][] {
   }
 }
 
-function rowsToPrograms(raw: { header: string[]; values: unknown[] }[]): EpgProgram[] {
+function rowsToPrograms(raw: { header: string[]; values: unknown[] }[], targetDate: string): EpgProgram[] {
   const out: EpgProgram[] = [];
   for (const { header, values } of raw) {
     const get = (names: string[]): string => {
@@ -66,7 +66,7 @@ function rowsToPrograms(raw: { header: string[]; values: unknown[] }[]): EpgProg
       CHANNELS.find((c) => c.name.toLowerCase() === raw.toLowerCase());
     const channelSlug = ch?.slug ?? channelRaw.toLowerCase().replace(/\s+/g, '-');
     const channelName = ch?.name ?? channelRaw;
-    const date = normalizeDate(dateRaw);
+    const date = resolveDate(dateRaw, targetDate);
     if (!date) continue;
     const start = `${date}T${normalizeTime(startRaw)}:00+07:00`;
     const end = `${date}T${normalizeTime(endRaw || startRaw)}:00+07:00`;
@@ -108,6 +108,38 @@ function normalizeDate(s: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+const WEEKDAYS: Record<string, number> = {
+  minggu: 0, sunday: 0, ahad: 0,
+  senin: 1, monday: 1,
+  selasa: 2, tuesday: 2,
+  rabu: 3, wednesday: 3,
+  kamis: 4, thursday: 4,
+  jumat: 5, friday: 5, 'jum\u2019at': 5,
+  sabtu: 6, saturday: 6,
+};
+
+/**
+ * Kolom Tanggal mendukung pola berulang (isi sekali, berlaku selamanya):
+ * - "2026-09-04"      → tanggal spesifik
+ * - "Harian"          → berlaku setiap hari
+ * - "Senin".. "Minggu" → berlaku tiap pekan pada hari itu
+ */
+function resolveDate(raw: string, targetDate: string): string | null {
+  const exact = normalizeDate(raw);
+  if (exact) return exact;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return null;
+  const key = raw.trim().toLowerCase();
+  if (['harian', 'setiap hari', 'setiap-hari', 'daily', 'all', 'semua'].includes(key)) {
+    return targetDate;
+  }
+  const wd = WEEKDAYS[key];
+  if (wd !== undefined) {
+    const targetWd = new Date(`${targetDate}T12:00:00+07:00`).getDay();
+    return targetWd === wd ? targetDate : null;
+  }
+  return null;
+}
+
 function normalizeTime(s: string): string {
   s = s.trim();
   const m = s.match(/(\d{1,2})[:.](\d{2})/);
@@ -116,7 +148,7 @@ function normalizeTime(s: string): string {
 }
 
 /** Ambil override manual dari Google Spreadsheet. Gagal → [] (situs tetap jalan). */
-export async function fetchSheetOverrides(env: SheetEnv): Promise<EpgProgram[]> {
+export async function fetchSheetOverrides(env: SheetEnv, targetDate: string): Promise<EpgProgram[]> {
   const id = env.GOOGLE_SHEET_ID?.trim();
   if (!id) return [];
   try {
@@ -129,7 +161,7 @@ export async function fetchSheetOverrides(env: SheetEnv): Promise<EpgProgram[]> 
         const values = data.values ?? [];
         if (values.length > 1) {
           const header = values[0].map((h) => String(h).toLowerCase());
-          return rowsToPrograms(values.slice(1).map((v) => ({ header, values: v })));
+          return rowsToPrograms(values.slice(1).map((v) => ({ header, values: v })), targetDate);
         }
       }
     }
@@ -152,7 +184,7 @@ export async function fetchSheetOverrides(env: SheetEnv): Promise<EpgProgram[]> 
       values: (r.c ?? []).map((c) => (c?.f ?? c?.v ?? '') as unknown),
     }));
     void parseGviz;
-    return rowsToPrograms(rows);
+    return rowsToPrograms(rows, targetDate);
   } catch {
     return [];
   }

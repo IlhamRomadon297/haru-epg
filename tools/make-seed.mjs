@@ -1,12 +1,11 @@
 // Generator contoh isi Google Sheet Haru EPG (Pay TV + Internasional).
 // Nasional tidak perlu diisi — otomatis dari tivie.id.
+// Kolom Tanggal mendukung: tanggal spesifik (2026-09-04), "Harian", atau nama hari (Senin..Minggu).
 // Cara pakai: node tools/make-seed.mjs  →  hasil: tools/sheet-seed.csv
 // Lalu di Google Sheets: File → Import → Upload sheet-seed.csv → "Append to current sheet".
 import { writeFileSync } from 'node:fs';
 
-const DAYS = ['2026-09-04', '2026-09-05', '2026-09-06'];
-
-// Prime-time yang beda tiap hari (index = index hari)
+// Prime-time tiap channel (pakai pola Harian → sama setiap hari, ganti manual bila perlu)
 const PRIME = {
   HBO: ['Deadpool & Wolverine', 'Dune: Part Two', 'Oppenheimer'],
   Cinemax: ['John Wick: Chapter 4', 'Fast X', 'The Equalizer 3'],
@@ -156,14 +155,12 @@ const q = (v) => {
 };
 
 const rows = [['Channel', 'Tanggal', 'Jam Mulai', 'Jam Selesai', 'Judul Acara', 'Kategori', 'Deskripsi']];
-DAYS.forEach((date, di) => {
-  for (const [ch, slots] of Object.entries(T)) {
-    for (const [s, e, t, c, d] of slots) {
-      const title = t === 'PRIME' ? (PRIME[ch]?.[di] ?? t) : t;
-      rows.push([ch, date, s, e, title, c, d]);
-    }
+for (const [ch, slots] of Object.entries(T)) {
+  for (const [s, e, t, c, d] of slots) {
+    const title = t === 'PRIME' ? (PRIME[ch]?.[0] ?? t) : t;
+    rows.push([ch, 'Harian', s, e, title, c, d]);
   }
-});
+}
 
 writeFileSync(new URL('./sheet-seed.csv', import.meta.url), '\uFEFF' + rows.map((r) => r.map(q).join(',')).join('\n'));
 console.log(`OK: ${rows.length - 1} baris contoh → tools/sheet-seed.csv`);
