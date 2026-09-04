@@ -41,39 +41,35 @@ function formatTime(iso) {
   return iso?.slice(11, 16) ?? '??:??';
 }
 
-function buildMessage(date, schedule) {
+function buildChannelMessage(date, ch) {
   const lines = [];
-  lines.push(`<b>📺 Jadwal TV Hari Ini</b>`);
+  lines.push(`<b>📺 ${ch.name}</b>`);
   lines.push(`<i>${prettyDate(date)}</i>`);
   lines.push('');
 
-  for (const slug of config.channels) {
-    const ch = schedule.channels?.find((c) => c.slug === slug);
-    if (!ch) {
-      lines.push(`<b>${slug}</b> — tidak tersedia`);
-      lines.push('');
-      continue;
-    }
+  // Tampilkan program berikutnya (max 8 ke depan dari sekarang)
+  const nowMs = Date.now();
+  const liveIdx = ch.programs.findIndex((p) => {
+    const s = Date.parse(p.start);
+    const e = Date.parse(p.end);
+    return Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
+  });
+  const startIdx = liveIdx >= 0 ? liveIdx : ch.programs.findIndex((p) => Date.parse(p.start) > nowMs);
+  const upcoming = ch.programs.slice(Math.max(0, startIdx), Math.max(0, startIdx) + 8);
 
-    const now = ch.now;
-    const next = ch.next;
-
-    if (now) {
-      lines.push(`🔴 <b>${ch.name}</b>`);
-      lines.push(`  ▸ ${now.title}`);
-      lines.push(`  ${formatTime(now.start)} – ${formatTime(now.end)} WIB`);
-    } else if (next) {
-      lines.push(`⚪ <b>${ch.name}</b>`);
-      lines.push(`  ▸ ${next.title}`);
-      lines.push(`  ${formatTime(next.start)} – ${formatTime(next.end)} WIB`);
-    } else {
-      lines.push(`⚫ <b>${ch.name}</b>`);
-      lines.push(`  Jadwal tidak tersedia`);
+  if (upcoming.length === 0) {
+    lines.push(`Jadwal tidak tersedia`);
+  } else {
+    for (const p of upcoming) {
+      const isCur = liveIdx >= 0 && p === ch.programs[liveIdx];
+      const icon = isCur ? '🔴' : '•';
+      lines.push(`${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b>`);
+      lines.push(`  ${p.title}`);
     }
-    lines.push('');
   }
 
-  lines.push(`<i>Update otomatis jam 7:00 WIB · haru-epg.pages.dev</i>`);
+  lines.push('');
+  lines.push(`<i>haru-epg.pages.dev</i>`);
   return lines.join('\n');
 }
 
@@ -90,28 +86,56 @@ async function telegram(method, body) {
   return json;
 }
 
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function main() {
   console.log('Fetching schedule...');
   const { date, data: schedule } = await fetchSchedule();
 
-  const text = buildMessage(date, schedule);
-  console.log('Message preview:\n' + text.replace(/<[^>]+>/g, ''));
+  let sent = 0;
+  for (const slug of config.channels) {
+    const ch = schedule.channels?.find((c) => c.slug === slug);
+    if (!ch || ch.programs.length === 0) {
+      console.log(`SKIP ${slug} (no data)`);
+      continue;
+    }
 
-  // Kirim pesan baru sebagai reply ke pinned message
-  const result = await telegram('sendMessage', {
-    chat_id: config.chat_id,
-    text,
-    parse_mode: 'HTML',
-    disable_web_page_preview: true,
-    reply_to_message_id: config.reply_to_message_id,
-  });
+    const text = buildChannelMessage(date, ch);
+    console.log(`Sending ${ch.name}...`);
 
-  if (result.ok) {
-    console.log(`Message sent! message_id=${result.result.message_id}`);
-  } else {
-    console.error('Failed to send message');
-    process.exit(1);
+    const body = {
+      chat_id: config.chat_id,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    };
+
+    // Kalau ada reply_to_message_id, reply ke itu
+    if (config.reply_to_message_id) {
+      body.reply_to_message_id = config.reply_to_message_id;
+    }
+
+    // Kalau ada message_thread_id (forum topic), kirim ke situ
+    if (config.message_thread_id) {
+      body.message_thread_id = config.message_thread_id;
+    }
+
+    const result = await telegram('sendMessage', body);
+
+    if (result.ok) {
+      sent++;
+      console.log(`  OK message_id=${result.result.message_id}`);
+    } else {
+      console.log(`  FAILED`);
+    }
+
+    // Delay supaya ngga kena rate limit
+    await sleep(1500);
   }
+
+  console.log(`\nDone: ${sent}/${config.channels.length} messages sent`);
 }
 
 main().catch((e) => {
