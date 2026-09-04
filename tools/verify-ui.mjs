@@ -8,4 +8,4 @@ console.log('label Pay TV:', home.includes('Pay TV ·') ? 'OK' : 'FAIL');
 for (const w of ['Kemarin', 'Hari Ini', 'Besok', 'Lusa']) console.log(`strip "${w}":`, home.includes(w) ? 'OK' : 'FAIL');
 console.log('footer card:', home.includes('foot-card') && home.includes('© 2026 Haru EPG') ? 'OK' : 'FAIL');
 const logo = await (await fetch(base + '/logo.svg')).text();
-console.log('logo tv (antena+layar+H):', logo.includes('<line') && logo.includes('>H<') ? 'OK' : 'FAIL');
+console.log('logo tv (= murni, tanpa antena/huruf):', !logo.includes('<line') && !logo.includes('>H<') && logo.includes('<rect') ? 'OK' : 'FAIL');

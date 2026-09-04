@@ -51,6 +51,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
         --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
       }
       * { box-sizing: border-box; }
+      html, body { overflow-x: clip; }
       body {
         margin: 0;
         font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -137,18 +138,19 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
       .chip { text-decoration: none; font-size: 0.8rem; font-weight: 700; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
       .chip.active, .chip:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
-      footer.site { margin: 34px 0 26px; display: flex; justify-content: center; }
+      footer.site { margin: 34px 0 26px; }
       footer.site .foot-card {
-        width: 100%; max-width: 720px; text-align: center;
+        margin: 0 auto; width: 100%; max-width: 720px; text-align: center;
         background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
         box-shadow: var(--shadow); padding: 20px 18px 16px;
       }
       .foot-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 4px; }
       .foot-brand img { width: 30px; height: 30px; }
       .foot-brand strong { font-size: 1.02rem; letter-spacing: -0.01em; }
-      .foot-tag { color: var(--muted); font-size: 0.82rem; margin: 0 0 12px; }
-      footer.site .src { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
-      .foot-meta { color: var(--muted); font-size: 0.78rem; margin: 0; }
+      .foot-tag { color: var(--muted); font-size: 0.82rem; margin: 0 0 12px; text-align: center; }
+      footer.site .src { display: flex; flex-wrap: nowrap; gap: 6px; justify-content: center; margin-bottom: 12px; }
+      footer.site .src .pill { font-size: 0.72rem; padding: 5px 10px; white-space: nowrap; }
+      .foot-meta { color: var(--muted); font-size: 0.78rem; margin: 0; text-align: center; }
       .disclaimer { background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 14px; margin-top: 18px; font-size: 0.8rem; }
       .datestrip-wrap { display: flex; gap: 10px; align-items: center; margin: 14px 0; }
       .datestrip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px; flex: 1; scrollbar-width: thin; }
@@ -170,6 +172,8 @@ const q = Astro.url.searchParams.get('q') ?? '';
       .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
       @media (max-width: 720px) {
         nav.main { display: none; }
+        footer.site .src { flex-wrap: wrap; }
+        footer.site .src .pill { white-space: normal; }
         .searchbox input { width: 92px; }
         .grid-channels { grid-template-columns: 1fr; }
         .hero { padding: 20px 16px; }
