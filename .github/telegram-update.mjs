@@ -13,7 +13,6 @@ if (!BOT_TOKEN) {
   process.exit(1);
 }
 
-// Get today's date in WIB
 function todayWIB() {
   const now = new Date();
   const wib = new Date(now.getTime() + (7 * 60 + now.getTimezoneOffset()) * 60000);
@@ -39,20 +38,19 @@ async function fetchSchedule() {
 }
 
 function formatTime(iso) {
-  // "2026-09-04T21:00:00+07:00" -> "21:00"
   return iso?.slice(11, 16) ?? '??:??';
 }
 
 function buildMessage(date, schedule) {
   const lines = [];
-  lines.push(`📺 *Jadwal TV Hari Ini*`);
-  lines.push(`${prettyDate(date)}`);
+  lines.push(`<b>📺 Jadwal TV Hari Ini</b>`);
+  lines.push(`<i>${prettyDate(date)}</i>`);
   lines.push('');
 
   for (const slug of config.channels) {
     const ch = schedule.channels?.find((c) => c.slug === slug);
     if (!ch) {
-      lines.push(`*${slug}* — tidak tersedia`);
+      lines.push(`<b>${slug}</b> — tidak tersedia`);
       lines.push('');
       continue;
     }
@@ -61,21 +59,21 @@ function buildMessage(date, schedule) {
     const next = ch.next;
 
     if (now) {
-      lines.push(`🔴 *${ch.name}*`);
+      lines.push(`🔴 <b>${ch.name}</b>`);
       lines.push(`  ▸ ${now.title}`);
       lines.push(`  ${formatTime(now.start)} – ${formatTime(now.end)} WIB`);
     } else if (next) {
-      lines.push(`⚪ *${ch.name}*`);
+      lines.push(`⚪ <b>${ch.name}</b>`);
       lines.push(`  ▸ ${next.title}`);
       lines.push(`  ${formatTime(next.start)} – ${formatTime(next.end)} WIB`);
     } else {
-      lines.push(`⚫ *${ch.name}*`);
+      lines.push(`⚫ <b>${ch.name}</b>`);
       lines.push(`  Jadwal tidak tersedia`);
     }
     lines.push('');
   }
 
-  lines.push(`_Update otomatis jam 7:00 WIB · haru-epg.pages.dev_`);
+  lines.push(`<i>Update otomatis jam 7:00 WIB · haru-epg.pages.dev</i>`);
   return lines.join('\n');
 }
 
@@ -97,32 +95,22 @@ async function main() {
   const { date, data: schedule } = await fetchSchedule();
 
   const text = buildMessage(date, schedule);
-  console.log('Message preview:\n' + text);
+  console.log('Message preview:\n' + text.replace(/<[^>]+>/g, ''));
 
-  // Edit existing message
-  const result = await telegram('editMessageText', {
+  // Kirim pesan baru sebagai reply ke pinned message
+  const result = await telegram('sendMessage', {
     chat_id: config.chat_id,
-    message_id: config.message_id,
     text,
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     disable_web_page_preview: true,
+    reply_to_message_id: config.reply_to_message_id,
   });
 
   if (result.ok) {
-    console.log('Message updated successfully!');
+    console.log(`Message sent! message_id=${result.result.message_id}`);
   } else {
-    // If edit fails (message not found), send new one
-    console.log('Edit failed, sending new message...');
-    const sent = await telegram('sendMessage', {
-      chat_id: config.chat_id,
-      text,
-      parse_mode: 'Markdown',
-      disable_web_page_preview: true,
-    });
-    if (sent.ok) {
-      console.log(`New message sent! message_id=${sent.result.message_id}`);
-      console.log(`Update telegram-config.json message_id to ${sent.result.message_id}`);
-    }
+    console.error('Failed to send message');
+    process.exit(1);
   }
 }
 
