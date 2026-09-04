@@ -1,0 +1,196 @@
+---
+interface Props {
+  title?: string;
+  description?: string;
+}
+const { title = 'Haru EPG — Jadwal TV Indonesia', description = 'Jadwal acara TV nasional, pay TV, dan internasional. Lengkap dengan status LIVE.' } = Astro.props;
+const q = Astro.url.searchParams.get('q') ?? '';
+---
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%238b5cf6'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'>H</text></svg>" />
+    <script is:inline>
+      try {
+        const t = localStorage.getItem('haru-theme');
+        if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) {
+          document.documentElement.classList.add('dark');
+        }
+      } catch {}
+    </script>
+    <style is:global>
+      :root {
+        --bg: #f6f4ff;
+        --surface: #ffffff;
+        --surface-2: #f1edfd;
+        --text: #1e1b2e;
+        --muted: #6d6884;
+        --brand: #7c3aed;
+        --brand-2: #a78bfa;
+        --brand-soft: #ede9fe;
+        --border: #e6e1f5;
+        --live: #e11d48;
+        --ok: #059669;
+        --shadow: 0 8px 30px rgba(124, 58, 237, 0.1);
+        --radius: 16px;
+      }
+      html.dark {
+        --bg: #0f0d1a;
+        --surface: #1a162e;
+        --surface-2: #241e3f;
+        --text: #f1edff;
+        --muted: #a49cc9;
+        --brand: #a78bfa;
+        --brand-2: #c4b5fd;
+        --brand-soft: #2b2350;
+        --border: #2e2750;
+        --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+      }
+      a { color: inherit; }
+      .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
+      header.top {
+        position: sticky; top: 0; z-index: 40;
+        background: color-mix(in srgb, var(--surface) 88%, transparent);
+        backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border);
+      }
+      .top-inner { display: flex; align-items: center; gap: 12px; height: 62px; }
+      .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 800; font-size: 1.15rem; }
+      .logo-mark {
+        width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center;
+        background: linear-gradient(135deg, #7c3aed, #c084fc);
+        color: #fff; font-weight: 900; box-shadow: var(--shadow);
+      }
+      .logo small { display: block; font-size: 0.66rem; font-weight: 600; color: var(--muted); letter-spacing: 0.08em; }
+      nav.main { display: flex; gap: 4px; margin-left: 8px; }
+      nav.main a {
+        text-decoration: none; font-size: 0.86rem; font-weight: 600; color: var(--muted);
+        padding: 8px 12px; border-radius: 999px;
+      }
+      nav.main a:hover, nav.main a.active { background: var(--brand-soft); color: var(--brand); }
+      .spacer { flex: 1; }
+      .searchbox { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 6px 6px 14px; }
+      .searchbox input { border: 0; outline: 0; background: transparent; color: var(--text); width: 150px; font-size: 0.88rem; }
+      .btn {
+        border: 1px solid var(--border); background: var(--surface); color: var(--text);
+        border-radius: 999px; padding: 8px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+      }
+      .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+      .btn:hover { filter: brightness(1.05); }
+      .theme-btn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; }
+      .hero {
+        background: linear-gradient(135deg, #7c3aed 0%, #a855f7 55%, #ec4899 130%);
+        color: #fff; border-radius: 22px; padding: 26px 22px; margin: 18px 0;
+        box-shadow: var(--shadow); position: relative; overflow: hidden;
+      }
+      .hero h1 { margin: 0 0 6px; font-size: clamp(1.3rem, 3.4vw, 1.9rem); letter-spacing: -0.02em; }
+      .hero p { margin: 0; opacity: 0.92; font-size: 0.92rem; max-width: 60ch; }
+      .hero .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+      .pill { background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.3); padding: 6px 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 700; }
+      .pill.light { background: var(--surface); color: var(--text); border-color: var(--border); }
+      .grid-channels { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+      .card-head { display: flex; align-items: center; gap: 12px; padding: 14px 14px 10px; }
+      .avatar { width: 44px; height: 44px; border-radius: 12px; background: var(--brand-soft); display: grid; place-items: center; font-weight: 800; color: var(--brand); overflow: hidden; flex-shrink: 0; }
+      .avatar img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+      .card-head h3 { margin: 0; font-size: 1rem; }
+      .card-head h3 a { text-decoration: none; }
+      .card-head h3 a:hover { color: var(--brand); }
+      .card-head .sub { font-size: 0.76rem; color: var(--muted); }
+      .now-box { margin: 0 14px; border-radius: 12px; padding: 10px 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 14%, var(--surface)), var(--surface)); border: 1px solid var(--border); }
+      .now-box.live { border-color: color-mix(in srgb, var(--live) 45%, var(--border)); }
+      .live-badge {
+        display: inline-flex; align-items: center; gap: 6px; font-size: 0.7rem; font-weight: 800;
+        letter-spacing: 0.08em; color: #fff; background: var(--live);
+        padding: 3px 9px; border-radius: 999px;
+      }
+      .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: blink 1.2s infinite; }
+      @keyframes blink { 50% { opacity: 0.35; } }
+      .prog-title { font-weight: 700; font-size: 0.94rem; margin: 6px 0 2px; }
+      .prog-title a { text-decoration: none; }
+      .prog-title a:hover { color: var(--brand); }
+      .prog-time { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+      .progress { height: 5px; border-radius: 99px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
+      .progress > div { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); border-radius: 99px; }
+      .now-box.live .progress > div { background: linear-gradient(90deg, var(--live), #fb7185); }
+      .timeline { list-style: none; margin: 8px 0 0; padding: 6px 14px 14px; display: flex; flex-direction: column; }
+      .timeline li { display: flex; gap: 10px; padding: 9px 0; border-top: 1px dashed var(--border); font-size: 0.86rem; }
+      .timeline li.current { background: color-mix(in srgb, var(--live) 7%, transparent); margin: 0 -14px; padding-left: 14px; padding-right: 14px; border-top-style: solid; }
+      .t-time { flex-shrink: 0; width: 86px; font-weight: 800; font-size: 0.76rem; color: var(--brand); padding-top: 2px; }
+      .t-title a { text-decoration: none; }
+      .t-title a:hover { color: var(--brand); }
+      .t-desc { color: var(--muted); font-size: 0.78rem; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0; }
+      .toolbar input[type='date'] { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 999px; padding: 8px 12px; font-size: 0.85rem; }
+      .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+      .chip { text-decoration: none; font-size: 0.8rem; font-weight: 700; padding: 7px 13px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+      .chip.active, .chip:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
+      footer.site { margin: 34px 0 26px; color: var(--muted); font-size: 0.8rem; text-align: center; }
+      .disclaimer { background: var(--surface); border: 1px dashed var(--border); border-radius: 12px; padding: 10px 14px; margin-top: 18px; font-size: 0.8rem; }
+      .detail { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px; box-shadow: var(--shadow); }
+      .empty { text-align: center; padding: 40px 20px; color: var(--muted); }
+      @media (max-width: 720px) {
+        nav.main { display: none; }
+        .searchbox input { width: 92px; }
+        .grid-channels { grid-template-columns: 1fr; }
+        .hero { padding: 20px 16px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top-inner">
+        <a class="logo" href="/">
+          <span class="logo-mark">H</span>
+          <span>Haru EPG<small>JADWAL TV INDONESIA</small></span>
+        </a>
+        <nav class="main">
+          <a href="/" class={Astro.url.pathname === '/' ? 'active' : ''}>Beranda</a>
+          <a href="/kategori/nasional" class={Astro.url.pathname.startsWith('/kategori/nasional') ? 'active' : ''}>Nasional</a>
+          <a href="/kategori/paytv" class={Astro.url.pathname.startsWith('/kategori/paytv') ? 'active' : ''}>Pay TV</a>
+          <a href="/kategori/internasional" class={Astro.url.pathname.startsWith('/kategori/internasional') ? 'active' : ''}>Internasional</a>
+        </nav>
+        <span class="spacer"></span>
+        <form class="searchbox" action="/cari" method="get" role="search">
+          <span aria-hidden="true">🔍</span>
+          <input name="q" placeholder="Cari acara / channel…" value={q} autocomplete="off" />
+          <button class="btn primary" type="submit" style="padding:6px 12px">Cari</button>
+        </form>
+        <button class="btn theme-btn" id="themeToggle" title="Dark mode" aria-label="Toggle dark mode">🌙</button>
+      </div>
+    </header>
+    <main class="wrap">
+      <slot />
+      <div class="disclaimer">
+        📌 <strong>Disclaimer:</strong> Jadwal dapat berubah sewaktu-waktu tergantung kebijakan stasiun televisi.
+        Data otomatis dari <a href="https://tivie.id" target="_blank" rel="noopener">tivie.id</a>
+        &amp; override manual via Google Spreadsheet. Disajikan ulang untuk kemudahan.
+      </div>
+    </main>
+    <footer class="site wrap">
+      <p><strong>Haru EPG</strong> — panduan acara TV Indonesia · <a href="/api/schedule">API JSON</a></p>
+    </footer>
+    <script is:inline>
+      const btn = document.getElementById('themeToggle');
+      const sync = () => { btn.textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙'; };
+      sync();
+      btn.addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        try { localStorage.setItem('haru-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); } catch {}
+        sync();
+      });
+    </script>
+  </body>
+</html>

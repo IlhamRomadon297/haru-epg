@@ -1,0 +1,74 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { findProgram, getDaySchedule, isLive, progress, todayWIB } from '../../lib/epg';
+import { getChannel } from '../../lib/channels';
+import { fetchTivieProgram } from '../../lib/tivie';
+
+export const prerender = false;
+
+const env = (Astro.locals as unknown as { runtime?: { env?: Record<string, string> } }).runtime?.env ?? {};
+const { slug } = Astro.params;
+const dateParam = Astro.url.searchParams.get('date');
+const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayWIB();
+
+const day = await getDaySchedule(env, date).catch(() => null);
+const prog = day ? findProgram(day, slug ?? '') : undefined;
+
+let detail: Awaited<ReturnType<typeof fetchTivieProgram>> = null;
+if (prog?.sourceSlug) {
+  try { detail = await fetchTivieProgram(prog.sourceKind ?? 'program', prog.sourceSlug); } catch { detail = null; }
+}
+
+const nowMs = Date.now();
+const live = prog ? isLive(nowMs, prog) : false;
+const ch = prog ? getChannel(prog.channelSlug) : undefined;
+---
+
+<Layout title={prog ? `${prog.title} — ${prog.channelName} — Haru EPG` : 'Acara tidak ditemukan — Haru EPG'}>
+  {!prog ? (
+    <div class="card empty">
+      <h3>Acara tidak ditemukan 😢</h3>
+      <p>Mungkin jadwal tanggal {date} sudah kedaluwarsa dari cache. Kembali ke <a href="/">beranda</a> atau cari lagi.</p>
+    </div>
+  ) : (
+    <>
+      <section class="hero">
+        <p style="margin:0 0 8px;opacity:.85">{prog.channelName} · {prog.date} · {prog.startLabel} – {prog.endLabel}</p>
+        <h1>{prog.title}</h1>
+        <div class="meta">
+          {live
+            ? <span class="pill">🔴 LIVE SEKARANG</span>
+            : <span class="pill">{Date.parse(prog.start) > nowMs ? '⏳ Akan tayang' : '✅ Sudah tayang'}</span>}
+          {prog.category && <span class="pill">{prog.category}</span>}
+          {prog.manual && <span class="pill">✏️ Data manual</span>}
+        </div>
+      </section>
+
+      <div class="detail">
+        {live && <div class="progress" style="margin-bottom:14px"><div style={`width:${progress(nowMs, prog).toFixed(1)}%`}></div></div>}
+        {detail?.poster && <img src={detail.poster} alt={prog.title} style="width:100%;max-height:340px;object-fit:cover;border-radius:14px;margin-bottom:14px" />}
+        <h3 style="margin:0 0 8px">Tentang acara ini</h3>
+        <p style="color:var(--muted);line-height:1.7;margin:0 0 16px">
+          {prog.description || detail?.description || 'Belum ada deskripsi untuk acara ini.'}
+        </p>
+        <div class="toolbar">
+          <a class="btn primary" style="text-decoration:none" href={`/channel/${prog.channelSlug}?date=${prog.date}`}>📺 Jadwal {prog.channelName} →</a>
+          {prog.sourceSlug && (
+            <a class="btn" style="text-decoration:none" href={`https://tivie.id/${prog.sourceKind ?? 'program'}/${prog.sourceSlug}`} target="_blank" rel="noopener">Lihat di tivie.id ↗</a>
+          )}
+          {ch?.logo && <img src={ch.logo} alt={ch.name} style="height:34px;background:var(--surface-2);border-radius:8px;padding:4px" />}
+        </div>
+        {(detail?.airings?.length ?? 0) > 0 && (
+          <>
+            <h4>Tayang juga di</h4>
+            <ul>
+              {detail!.airings.map((a) => (
+                <li>{a.channelName} — {a.label}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </>
+  )}
+</Layout>
