@@ -24,7 +24,7 @@ const logo = (f: string) => `${logoBase}${f}?w=120&h=120`;
 
 export const CHANNELS: Channel[] = [
   // Unggulan — selalu teratas di semua daftar
-  { slug: 'animax', name: 'Animax', category: 'paytv', provider: 'singtel', providerRef: '5342', logo: '/logos/animax.png', featured: true },
+  { slug: 'animax', name: 'ANIMAX HD', category: 'paytv', provider: 'singtel', providerRef: '5342', logo: '/logos/animax.png', featured: true },
   { slug: 'aniplus', name: 'ANIPLUS HD', category: 'paytv', provider: 'singtel', providerRef: '5340', logo: '/logos/aniplus.png', featured: true },
   { slug: 'antv', name: 'ANTV', category: 'nasional', tivieSlug: 'antv', provider: 'mncvision', providerRef: '115', logo: '/logos/antv.png' },
   { slug: 'btv', name: 'BTV', category: 'nasional', tivieSlug: 'btv', provider: 'mncvision', providerRef: '103', logo: '/logos/btv.png' },
