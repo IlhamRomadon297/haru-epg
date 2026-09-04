@@ -1,0 +1,10 @@
+const base = 'https://haru-epg.pages.dev';
+const home = await (await fetch(base + '/?date=2026-09-04', { headers: { 'User-Agent': 'Mozilla/5.0' } })).text();
+const title = home.match(/<title>(.*?)<\/title>/)?.[1];
+console.log('title:', title, '| pakai |:', title?.includes('|') && !title?.includes('—') ? 'OK' : 'FAIL');
+console.log('logo.png ref:', home.includes('/logo.png') ? 'OK' : 'FAIL');
+const logo = await (await fetch(base + '/logo.png')).then((r) => ({ st: r.status, ct: r.headers.get('content-type'), len: (await r.arrayBuffer()).byteLength }));
+console.log('logo.png served:', logo.st === 200 && logo.ct?.includes('png') && logo.len > 10000 ? `OK (${logo.len}b)` : `FAIL ${JSON.stringify(logo)}`);
+const cssHref = home.match(/<link[^>]+rel="stylesheet"[^>]*>/)?.[0].match(/href="([^"]+)"/)?.[1];
+const css = await (await fetch(base + cssHref)).text();
+console.log('footer margin auto:', css.includes('footer.site{margin:34px auto 26px}') ? 'OK' : 'FAIL');
