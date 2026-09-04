@@ -16,6 +16,11 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Find chat IDs (diagnostic)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: node .github/find-chat-id.mjs
+
       - name: Send schedule to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
