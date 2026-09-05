@@ -47,7 +47,7 @@ function formatTime(iso) {
 function buildMessages(date, slug, channelName, programs) {
   const nowMs = Date.now();
   const header = `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n`;
-  const footer = `\n\n<a href="https://haru-epg.pages.dev/channel/${slug}">🌐 haru-epg.pages.dev</a>`;
+  const footer = `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="https://haru-epg.pages.dev/channel/${slug}">Klik disini</a>`;
 
   if (programs.length === 0) {
     return [header + '\nJadwal tidak tersedia' + footer];
