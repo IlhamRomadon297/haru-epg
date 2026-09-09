@@ -48,7 +48,6 @@ function formatTime(iso) {
 }
 
 function buildMessages(date, slug, channelName, programs, withHeader = true) {
-  const nowMs = Date.now();
   const header = withHeader ? `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n` : '';
   const footer = `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="https://haru-epg.pages.dev/channel/${slug}">Klik disini</a>`;
 
@@ -56,13 +55,7 @@ function buildMessages(date, slug, channelName, programs, withHeader = true) {
     return ['<b>📺 ' + channelName + '</b>\n<i>' + prettyDate(date) + '</i>\n\nJadwal tidak tersedia' + footer];
   }
 
-  const programLines = programs.map((p) => {
-    const s = Date.parse(p.start);
-    const e = Date.parse(p.end);
-    const isCur = Number.isFinite(s) && Number.isFinite(e) && s <= nowMs && nowMs < e;
-    const icon = isCur ? '🔴' : '•';
-    return `${icon} <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`;
-  });
+  const programLines = programs.map((p) => `• <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`);
 
   const fullText = header + '\n' + programLines.join('\n') + footer;
 
