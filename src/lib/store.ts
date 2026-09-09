@@ -2,7 +2,12 @@ import type { EpgProgram } from './types';
 
 /** Structural typing untuk D1Database (tanpa perlu @cloudflare/workers-types). */
 export interface D1BoundStmt {
-  bind(...values: unknown[]): { all(): Promise<{ results: Record<string, unknown>[] }>; run(): Promise<unknown> };
+  bind(...values: unknown[]): {
+    all(): Promise<{ results: Record<string, unknown>[] }>;
+    run(): Promise<unknown>;
+    first?<T = Record<string, unknown>>(col?: string): Promise<T | null>;
+  };
+  first?<T = Record<string, unknown>>(col?: string): Promise<T | null>;
 }
 export interface D1Db {
   prepare(query: string): D1BoundStmt;

@@ -13,7 +13,6 @@ const DEFAULT_CHANNELS = [
   'nickelodeon',
   'nickelodeon-jr',
   'dreamworks',
-  'axn',
   'cbeebies',
   'rock-action',
   'galaxy-premium',
@@ -42,7 +41,7 @@ export const GET: APIRoute = async ({ locals }) => {
       const res = await db
         .prepare('SELECT channels FROM telegram_channels WHERE chat_id = ? AND message_thread_id = ?')
         .bind(TARGET_CHAT, TARGET_TOPIC)
-        .first<{ channels: string }>();
+        .first() as { channels: string } | null;
       if (res?.channels) {
         const parsed = JSON.parse(res.channels);
         if (Array.isArray(parsed) && parsed.length > 0) {

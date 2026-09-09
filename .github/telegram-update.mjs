@@ -10,7 +10,7 @@ const requestedChannels = (process.env.TELEGRAM_CHANNELS ?? '').trim();
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_BASE = 'https://haru-epg.pages.dev';
 const TG_MAX = 4096;
-const MAX_PHOTO_LINES = 28;
+const CAPTION_MAX = 1000;
 
 if (!BOT_TOKEN) {
   console.error('TELEGRAM_BOT_TOKEN not set');
@@ -34,10 +34,6 @@ function prettyDate(dateISO) {
 
 function formatTime(iso) {
   return iso?.slice(11, 16) ?? '??:??';
-}
-
-function escapeXml(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 async function fetchChannel(slug, date) {
@@ -69,27 +65,80 @@ function htmlLine(p) {
   return `• <b>${formatTime(p.start)} – ${formatTime(p.end)}</b> ${p.title}`;
 }
 
-function plainLine(p) {
-  const time = `${formatTime(p.start)} – ${formatTime(p.end)}`;
-  const title = String(p.title ?? '').slice(0, 52);
-  return `• ${time} ${title}`;
+function headerText(date, channelName) {
+  return `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>`;
 }
 
-function chunkText(date, slug, channelName, htmlLines, { withHeader = true, startPart = 1, note = '' } = {}) {
-  if (htmlLines.length === 0) return [];
-  const header = withHeader ? `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n` : '';
-  const footer = `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="https://haru-epg.pages.dev/channel/${slug}">Klik disini</a>`;
-  const lead = note ? `\n<i>${note}</i>\n` : '';
+function footerText(slug) {
+  return `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="https://haru-epg.pages.dev/channel/${slug}">Klik disini</a>`;
+}
 
-  const fullText = header + lead + htmlLines.join('\n') + footer;
+// Pecah pesan (pakai caption foto sebagai bagian pertama bila logo ada).
+// Mengembalikan { caption: string|null, rest: string[] } — caption berisi header+sebanyak
+// mungkin baris (≤ CAPTION_MAX); sisanya jadi pesan teks lanjutan.
+function splitSchedule(date, slug, channelName, lines) {
+  const header = headerText(date, channelName);
+  const footer = footerText(slug);
+
+  const full = header + '\n\n' + lines.join('\n') + footer;
+  if (full.length <= CAPTION_MAX) {
+    return { caption: full, rest: [] };
+  }
+
+  // Muatkan ke kapasitas caption (header + baris utuh)
+  let current = header + '\n\n';
+  let i = 0;
+  for (; i < lines.length; i++) {
+    const test = current + lines[i] + '\n';
+    if (test.length > CAPTION_MAX - 40) break;
+    current = test;
+  }
+  const ended = i >= lines.length;
+  const ending = ended ? footer : '\n➡️ <i>lanjut di pesan berikut...</i>';
+  const caption = (current + ending).slice(0, CAPTION_MAX);
+  const rest = lines.slice(i);
+  return { caption, rest };
+}
+
+// Bagian teks lanjutan (tanpa foto) setelah caption keburu habis atau jika foto gagal.
+function textChunksFromLines(date, slug, channelName, lines, { isContinuation = false } = {}) {
+  if (lines.length === 0) return [];
+  const footer = footerText(slug);
+
+  if (isContinuation) {
+    const lead = '<i>Lanjutan jadwal:</i>\n\n';
+    const single = lead + lines.join('\n') + footer;
+    if (single.length <= TG_MAX) return [single];
+
+    const chunks = [];
+    let currentChunk = lead;
+    let partNum = 2;
+    for (const line of lines) {
+      const testChunk = currentChunk + line + '\n' + footer;
+      if (testChunk.length > TG_MAX - 30) {
+        currentChunk += `\n➡️ <i>lanjut part ${partNum}...</i>`;
+        chunks.push(currentChunk.trim());
+        currentChunk = `<b>📺 ${channelName}</b> (part ${partNum})\n<i>${prettyDate(date)}</i>\n\n`;
+        partNum++;
+      }
+      currentChunk += line + '\n';
+    }
+    currentChunk += '\n' + footer;
+    chunks.push(currentChunk.trim());
+    return chunks;
+  }
+
+  // Normal text message (jika tidak ada foto / foto gagal kirim)
+  const header = headerText(date, channelName);
+  const fullText = header + '\n\n' + lines.join('\n') + footer;
   if (fullText.length <= TG_MAX) return [fullText];
 
   const chunks = [];
-  let currentChunk = header + lead;
-  let partNum = startPart;
-  for (const line of htmlLines) {
+  let currentChunk = header + '\n\n';
+  let partNum = 1;
+  for (const line of lines) {
     const testChunk = currentChunk + line + '\n' + footer;
-    if (testChunk.length > TG_MAX - 20) {
+    if (testChunk.length > TG_MAX - 30) {
       currentChunk += `\n➡️ <i>lanjut part ${partNum + 1}...</i>`;
       chunks.push(currentChunk.trim());
       partNum++;
@@ -100,63 +149,6 @@ function chunkText(date, slug, channelName, htmlLines, { withHeader = true, star
   currentChunk += '\n' + footer;
   chunks.push(currentChunk.trim());
   return chunks;
-}
-
-function buildScheduleSVG({ name, dateLabel, logoDataUrl, lines }) {
-  const W = 620;
-  const HDR = 96;
-  const LH = 24;
-  const FOOT = 34;
-  const H = HDR + lines.length * LH + FOOT;
-  const brand = '#ea580c';
-  const dark = '#111827';
-  const muted = '#6b7280';
-  const border = '#e5e7eb';
-
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="${W}" height="${H}" fill="#ffffff"/>
-  <rect width="${W}" height="${HDR}" fill="#fff7ed"/>`;
-  if (logoDataUrl) {
-    svg += `<image href="${logoDataUrl}" x="22" y="26" width="48" height="48" preserveAspectRatio="xMidYMid meet"/>`;
-  }
-  svg += `<text x="${logoDataUrl ? 84 : 22}" y="40" font-size="20" font-weight="bold" font-family="DejaVu Sans" fill="${dark}">${escapeXml(name)}</text>
-  <text x="${logoDataUrl ? 84 : 22}" y="64" font-size="13" font-family="DejaVu Sans" fill="${muted}">${escapeXml(dateLabel)}</text>
-  <line x1="22" y1="${HDR}" x2="${W - 22}" y2="${HDR}" stroke="${border}" stroke-width="1"/>`;
-
-  lines.forEach((line, i) => {
-    const y = HDR + 20 + i * LH;
-    const m = line.match(/^•\s+([\d:]+)\s+–\s+([\d:]+)\s+(.*)$/);
-    if (m) {
-      const time = m[1] + ' – ' + m[2];
-      let title = m[3];
-      const est = time.length * 8 + title.length * 7.5 + 30;
-      if (est > W - 40) {
-        const max = Math.floor((W - 40 - time.length * 8 - 24) / 7.5);
-        title = title.slice(0, Math.max(8, max)) + '…';
-      }
-      svg += `<text x="24" y="${y}" font-size="13.5" font-family="DejaVu Sans" fill="${dark}">• <tspan font-weight="bold">${escapeXml(time)}</tspan> ${escapeXml(title)}</text>`;
-    } else {
-      svg += `<text x="24" y="${y}" font-size="13.5" font-family="DejaVu Sans" fill="${dark}">${escapeXml(line.slice(0, 60))}</text>`;
-    }
-  });
-
-  svg += `<line x1="22" y1="${H - FOOT}" x2="${W - 22}" y2="${H - FOOT}" stroke="${border}" stroke-width="1"/>
-  <text x="24" y="${H - 14}" font-size="12" font-family="DejaVu Sans" fill="${brand}">Haru EPG · haru-epg.pages.dev/channel</text>
-</svg>`;
-  return svg;
-}
-
-async function renderSchedulePNG({ name, dateLabel, logoDataUrl, lines, maxLines = MAX_PHOTO_LINES }) {
-  if (!lines.length) return null;
-  try {
-    const { Resvg } = await import('@resvg/resvg-js');
-    const svg = buildScheduleSVG({ name, dateLabel, logoDataUrl, lines: lines.slice(0, maxLines) });
-    const png = new Resvg(svg, { fitTo: { mode: 'width', value: 620 } }).render().asPng();
-    return Buffer.from(png);
-  } catch (e) {
-    console.error('  render PNG failed:', String(e));
-    return null;
-  }
 }
 
 async function telegram(method, body) {
@@ -172,10 +164,10 @@ async function telegram(method, body) {
   return json;
 }
 
-async function telegramUploadPhoto(base, png, caption) {
+async function telegramUploadPhoto(base, logoBytes, caption) {
   const fd = new FormData();
-  fd.append('photo', new Blob([png], { type: 'image/png' }), 'schedule.png');
-  fd.append('caption', caption ?? '');
+  fd.append('photo', new Blob([logoBytes], { type: 'image/png' }), 'logo.png');
+  if (caption) fd.append('caption', caption);
   fd.append('parse_mode', 'HTML');
   for (const [k, v] of Object.entries(base)) fd.append(k, String(v));
   const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
@@ -186,21 +178,20 @@ async function telegramUploadPhoto(base, png, caption) {
   return json;
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function getLogoDataUrl(logoPath) {
+async function fetchLogo(logoPath) {
   if (!logoPath) return null;
   const url = logoPath.startsWith('http') ? logoPath : API_BASE + logoPath;
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    return `data:image/png;base64,${buf.toString('base64')}`;
+    return Buffer.from(await res.arrayBuffer());
   } catch {
     return null;
   }
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 async function main() {
@@ -232,28 +223,27 @@ async function main() {
     if (config.message_thread_id) base.message_thread_id = config.message_thread_id;
 
     const lines = ch.programs.map(htmlLine);
-    const logoDataUrl = await getLogoDataUrl(ch.logo);
-    const png = await renderSchedulePNG({
-      name: ch.name,
-      dateLabel: prettyDate(date),
-      logoDataUrl,
-      lines: ch.programs.map(plainLine),
-      maxLines: MAX_PHOTO_LINES,
-    });
+    const logoBytes = await fetchLogo(ch.logo);
 
-    let renderedPhoto = false;
-    if (png) {
-      const caption = `<b>📺 ${ch.name}</b>\n<i>${prettyDate(date)}</i>`;
-      const photoResult = await telegramUploadPhoto(base, png, caption);
-      renderedPhoto = photoResult.ok;
-      console.log(`  Foto ${renderedPhoto ? 'OK' : 'FAILED'}` + (renderedPhoto ? ` (${Math.min(ch.programs.length, MAX_PHOTO_LINES)}/${ch.programs.length} baris)` : ''));
+    let photoSent = false;
+    let rest = [];
+    if (logoBytes) {
+      const { caption, rest: r } = splitSchedule(date, slug, ch.name, lines);
+      const photoResult = await telegramUploadPhoto(base, logoBytes, caption);
+      photoSent = photoResult.ok;
+      if (photoSent) rest = r;
+      console.log(`  Logo+caption ${photoSent ? 'OK' : 'FAILED'} (${photoSent ? caption.length + ' char caption' : ''})`);
       await sleep(1200);
     }
 
-    const remaining = lines.slice(renderedPhoto ? MAX_PHOTO_LINES : 0);
-    const messages = renderedPhoto
-      ? chunkText(date, slug, ch.name, remaining, { withHeader: false, note: 'Lanjutan jadwal' })
-      : chunkText(date, slug, ch.name, lines, { withHeader: true });
+    let messages = [];
+    if (photoSent) {
+      if (rest.length > 0) {
+        messages = textChunksFromLines(date, slug, ch.name, rest, { isContinuation: true });
+      }
+    } else {
+      messages = textChunksFromLines(date, slug, ch.name, lines, { isContinuation: false });
+    }
     console.log(`  → ${messages.length} text message(s), sizes: ${messages.map((m) => m.length).join(', ')}`);
 
     for (let i = 0; i < messages.length; i++) {

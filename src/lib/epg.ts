@@ -62,7 +62,7 @@ function ttlSeconds(env: Env): number {
 
 async function readCache(key: string): Promise<DaySchedule | null> {
   try {
-    const cache = (globalThis as unknown as { caches?: CacheStorage }).caches?.default;
+    const cache = (globalThis as any).caches?.default;
     if (cache) {
       const hit = await cache.match(key);
       if (hit) {
@@ -85,7 +85,7 @@ async function readCache(key: string): Promise<DaySchedule | null> {
 
 async function writeCache(key: string, data: DaySchedule, ttl: number): Promise<void> {
   try {
-    const cache = (globalThis as unknown as { caches?: CacheStorage }).caches?.default;
+    const cache = (globalThis as any).caches?.default;
     if (cache) {
       await cache.put(
         key,

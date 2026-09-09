@@ -53,6 +53,31 @@ const ROTATE_OFFSETS = [-3, -2, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const BOT_CHAT = -1003974729570;
 const BOT_TOPIC = 394;
 
+const DEFAULT_CHANNELS = [
+  'animax',
+  'aniplus',
+  'hbo',
+  'hbo-hits',
+  'hbo-family',
+  'hbo-signature',
+  'nickelodeon',
+  'nickelodeon-jr',
+  'dreamworks',
+  'cbeebies',
+  'rock-action',
+  'galaxy-premium',
+  'imc',
+  'vision-prime',
+  'mentari-tv',
+  'rtv',
+  'trans7',
+  'trans-tv',
+  'mnctv',
+  'rcti',
+  'gtv',
+  'antv',
+];
+
 async function tgFetch(env: CronEnv, method: string, body: unknown): Promise<{ ok: boolean; [k: string]: unknown }> {
   if (!env.TELEGRAM_BOT_TOKEN) return { ok: false };
   const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
@@ -65,11 +90,11 @@ async function tgFetch(env: CronEnv, method: string, body: unknown): Promise<{ o
 
 async function readTelegramRow(env: CronEnv): Promise<{ slugs: string[]; admins: number[] } | null> {
   if (!env.DB) return null;
-  const row = await env.DB.prepare(
+  const row = (await (env.DB.prepare(
     'SELECT channels, admins FROM telegram_channels WHERE chat_id = ?1 AND message_thread_id = ?2',
   )
-    .bind(BOT_CHAT, BOT_TOPIC)
-    .first<{ channels: string; admins: string | null }>();
+    .bind(BOT_CHAT, BOT_TOPIC) as any)
+    .first()) as { channels: string; admins: string | null } | null;
   if (!row?.channels) return null;
   try {
     const parsed = JSON.parse(row.channels) as unknown;
@@ -81,9 +106,10 @@ async function readTelegramRow(env: CronEnv): Promise<{ slugs: string[]; admins:
   }
 }
 
-async function readTelegramChannels(env: CronEnv): Promise<string[] | null> {
+async function readTelegramChannels(env: CronEnv): Promise<string[]> {
   const row = await readTelegramRow(env);
-  return row?.slugs ?? null;
+  if (row?.slugs && row.slugs.length > 0) return row.slugs;
+  return DEFAULT_CHANNELS;
 }
 
 async function writeTelegramRow(env: CronEnv, slugs: string[], admins?: number[]): Promise<void> {
@@ -109,15 +135,61 @@ function splitArgs(text: string): string[] {
     .filter(Boolean);
 }
 
-async function handleCommand(env: CronEnv, text: string, replyTo?: number): Promise<boolean> {
-  const [cmd, ...restRaw] = text.split(/\s+/);
+async function checkIsAdmin(env: CronEnv, userId: number): Promise<boolean> {
+  if (env.ALLOWED_USER_IDS) {
+    const allowed = new Set(env.ALLOWED_USER_IDS.split(',').map((s) => s.trim()).filter(Boolean).map(Number));
+    if (allowed.has(userId)) return true;
+  }
+  // Verifikasi apakah user adalah admin grup Telegram via getChatMember
+  try {
+    const res = await tgFetch(env, 'getChatMember', { chat_id: BOT_CHAT, user_id: userId });
+    if (res.ok && res.result) {
+      const status = (res.result as { status?: string }).status;
+      if (status === 'creator' || status === 'administrator') return true;
+    }
+  } catch {}
+
+  // Fallback: periksa list admin di D1
+  const row = await readTelegramRow(env);
+  if (row?.admins && row.admins.includes(userId)) return true;
+  if (!row?.admins || row.admins.length === 0) {
+    await writeTelegramRow(env, row?.slugs ?? DEFAULT_CHANNELS, [userId]);
+    return true;
+  }
+  return false;
+}
+
+async function registerBotCommands(env: CronEnv): Promise<boolean> {
+  const commands = [
+    { command: 'list', description: 'Lihat daftar channel EPG' },
+    { command: 'add', description: 'Tambah channel (contoh: /add rcti,gtv)' },
+    { command: 'remove', description: 'Hapus channel (contoh: /remove rcti)' },
+    { command: 'help', description: 'Panduan penggunaan bot EPG' },
+  ];
+  const r1 = await tgFetch(env, 'setMyCommands', { commands });
+  const r2 = await tgFetch(env, 'setMyCommands', {
+    commands,
+    scope: { type: 'chat', chat_id: BOT_CHAT },
+  });
+  return r1.ok || r2.ok;
+}
+
+async function handleCommand(
+  env: CronEnv,
+  text: string,
+  replyTo?: number,
+  fromId?: number,
+  threadId: number = BOT_TOPIC,
+): Promise<boolean> {
+  const [cmdRaw, ...restRaw] = text.split(/\s+/);
+  const cmd = cmdRaw.toLowerCase().replace(/@\w+$/, '');
   const rest = restRaw.join(' ').trim();
   const known = new Set(CHANNELS.map((c) => c.slug));
 
   const reply = async (line: string) => {
     const body: Record<string, unknown> = {
       chat_id: BOT_CHAT,
-      message_thread_id: BOT_TOPIC,
+      message_thread_id: threadId,
       text: line,
       parse_mode: 'Markdown',
     };
@@ -125,21 +197,38 @@ async function handleCommand(env: CronEnv, text: string, replyTo?: number): Prom
     await tgFetch(env, 'sendMessage', body);
   };
 
+  // Jika dipanggil di luar topik target EPG
+  if (threadId !== BOT_TOPIC) {
+    if (['/list', '/add', '/remove', '/help', '/setmenu'].includes(cmd)) {
+      await reply('⚠️ Bot EPG hanya dapat digunakan di topik khusus EPG.');
+      return true;
+    }
+    return false;
+  }
+
   if (cmd === '/list') {
-    const cur = (await readTelegramChannels(env)) ?? [];
-    await reply(`📋 Channel bot (${cur.length}):\n${channelNames(cur)}\n\n+ Menambah: /add rcti,gtv\n− Menghapus: /remove rcti`);
+    const cur = await readTelegramChannels(env);
+    await reply(`📋 *Channel bot (${cur.length}):*\n${channelNames(cur)}\n\n➕ Menambah: \`/add rcti,gtv\`\n➖ Menghapus: \`/remove rcti\``);
     return true;
   }
 
   if (cmd === '/add' || cmd === '/remove') {
+    if (fromId !== undefined) {
+      const isAdmin = await checkIsAdmin(env, fromId);
+      if (!isAdmin) {
+        await reply('⛔ Hanya admin grup yang dapat menambah atau menghapus channel.');
+        return true;
+      }
+    }
+
     const slugs = splitArgs(rest);
     if (!slugs.length) {
-      await reply(cmd === '/add' ? 'Contoh: /add rcti,trans7,gtv' : 'Contoh: /remove trans7');
+      await reply(cmd === '/add' ? 'Contoh: `/add rcti,trans7,gtv`' : 'Contoh: `/remove trans7`');
       return true;
     }
     const bad = slugs.filter((s) => !known.has(s));
     const good = slugs.filter((s) => known.has(s));
-    const cur = (await readTelegramChannels(env)) ?? [];
+    const cur = await readTelegramChannels(env);
     let next: string[];
     if (cmd === '/add') {
       next = [...cur, ...good.filter((s) => !cur.includes(s))];
@@ -148,16 +237,36 @@ async function handleCommand(env: CronEnv, text: string, replyTo?: number): Prom
     }
     await writeTelegramRow(env, next);
     const notes = [
-      `${cmd === '/add' ? 'Ditambah' : 'Dihapus'}: ${cmd === '/add' ? channelNames(good) || '(tidak ada)' : channelNames(good) || '(tidak ada)'}`,
-      bad.length ? `Tidak dikenal: ${bad.join(', ')}` : null,
-      `Daftar kini (${next.length}): ${channelNames(next)}`,
+      `${cmd === '/add' ? '✅ *Ditambah*:' : '🗑️ *Dihapus*:'} ${channelNames(good) || '(tidak ada)'}`,
+      bad.length ? `❓ *Tidak dikenal*: ${bad.join(', ')}` : null,
+      `📋 *Daftar kini (${next.length}):*\n${channelNames(next)}`,
     ];
-    await reply(notes.filter(Boolean).join('\n'));
+    await reply(notes.filter(Boolean).join('\n\n'));
     return true;
   }
 
   if (cmd === '/help') {
-    await reply('Command bot: /list · /add rcti,gtv · /remove rcti');
+    await reply(
+      '🤖 *Panduan Bot EPG Haru*\n\n' +
+        '• `/list` - Menampilkan channel aktif\n' +
+        '• `/add <slug>` - Menambah channel (Admin)\n' +
+        '• `/remove <slug>` - Menghapus channel (Admin)\n' +
+        '• `/setmenu` - Perbarui menu tombol bot di grup\n\n' +
+        '💡 _Jadwal harian diposting otomatis setiap jam 00:30 WIB._',
+    );
+    return true;
+  }
+
+  if (cmd === '/setmenu') {
+    if (fromId !== undefined) {
+      const isAdmin = await checkIsAdmin(env, fromId);
+      if (!isAdmin) {
+        await reply('⛔ Hanya admin yang dapat mengatur menu bot.');
+        return true;
+      }
+    }
+    const ok = await registerBotCommands(env);
+    await reply(ok ? '✅ Menu tombol bot berhasil diperbarui di grup!' : '❌ Gagal mendaftarkan menu bot ke Telegram.');
     return true;
   }
 
@@ -165,32 +274,17 @@ async function handleCommand(env: CronEnv, text: string, replyTo?: number): Prom
 }
 
 async function handleTelegramUpdate(env: CronEnv, update: Record<string, unknown>): Promise<void> {
-  const msg = update.message as Record<string, unknown> | undefined;
+  const msg = (update.message ?? update.channel_post) as Record<string, unknown> | undefined;
   if (!msg || typeof msg.text !== 'string') return;
   if (msg.chat && (msg.chat as { id: number }).id !== BOT_CHAT) return;
-  if (msg.message_thread_id !== undefined && (msg.message_thread_id as number) !== BOT_TOPIC) return;
-
-  const fromId = (msg.from as { id?: number } | undefined)?.id;
-  if (fromId === undefined) return;
-
-  if (env.ALLOWED_USER_IDS) {
-    const allowed = new Set(env.ALLOWED_USER_IDS.split(',').map((s) => s.trim()).filter(Boolean).map(Number));
-    if (!allowed.has(fromId)) return;
-  } else {
-    // Pemilik di-claim dari pengirim command pertama di topic — anti member iseng.
-    const row = await readTelegramRow(env);
-    const admins = row?.admins ?? [];
-    if (admins.length === 0) {
-      admins.push(fromId);
-      await writeTelegramRow(env, row?.slugs ?? [], admins);
-    } else if (!admins.includes(fromId)) {
-      return;
-    }
-  }
 
   const text = (msg.text as string).trim();
   if (!text.startsWith('/')) return;
-  await handleCommand(env, text, msg.message_id as number | undefined);
+
+  const fromId = (msg.from as { id?: number } | undefined)?.id;
+  const threadId = (msg.message_thread_id as number | undefined) ?? BOT_TOPIC;
+
+  await handleCommand(env, text, msg.message_id as number | undefined, fromId, threadId);
 }
 
 export default {
