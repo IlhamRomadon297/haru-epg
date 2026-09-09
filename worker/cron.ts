@@ -67,8 +67,10 @@ export default {
     const url = new URL(req.url);
     if (url.pathname === '/sync' && env.CRON_KEY && url.searchParams.get('key') === env.CRON_KEY) {
       const date = url.searchParams.get('date') ?? todayWIB();
+      const shardNo = url.searchParams.get('shard');
+      const channels = shardNo === null ? FETCHABLE : FETCHABLE.slice(Number(shardNo) * SHARD_SIZE, (Number(shardNo) + 1) * SHARD_SIZE);
       try {
-        const r = await syncShardDate(env, date, FETCHABLE);
+        const r = await syncShardDate(env, date, channels);
         return Response.json({ ok: true, ...r });
       } catch (e) {
         return Response.json({ ok: false, error: String(e) }, { status: 500 });

@@ -55,6 +55,48 @@ export async function readDayFromD1(
   return { programs, updatedAt };
 }
 
+/** Baca jadwal SATU channel (1 row D1) — ringan, dipakai jalur /api/channel/[slug]. */
+export async function readChannelFromD1(
+  db: D1Db,
+  slug: string,
+  date: string,
+): Promise<{ programs: EpgProgram[]; updatedAt: string } | null> {
+  const res = await db
+    .prepare(
+      `SELECT channel_slug, date, programs_json, updated_at
+       FROM channel_days WHERE channel_slug = ? AND date = ?`,
+    )
+    .bind(slug, date)
+    .all();
+  const row = res.results[0];
+  if (!row) return null;
+  const programs: EpgProgram[] = [];
+  try {
+    const arr = JSON.parse(str(row.programs_json, '[]')) as Record<string, unknown>[];
+    for (const p of arr) {
+      programs.push({
+        id: str(p.id),
+        channelSlug: str(p.channelSlug),
+        channelName: str(p.channelName),
+        date: str(p.date),
+        start: str(p.start),
+        end: str(p.end),
+        startLabel: str(p.startLabel),
+        endLabel: str(p.endLabel),
+        title: str(p.title),
+        category: (p.category as string | null) ?? undefined,
+        description: (p.description as string | null) ?? undefined,
+        slug: str(p.slug),
+        manual: Number(p.manual ?? 0) === 1,
+      });
+    }
+  } catch {
+    /* skip corrupt row */
+  }
+  if (programs.length === 0) return null;
+  return { programs, updatedAt: str(row.updated_at, '1970-01-01T00:00:00.000Z') };
+}
+
 /** Hapus tanggal di luar jendela retensi (arsip H-4, depan H+11). */
 export async function pruneD1(db: D1Db, minDate: string, maxDate: string): Promise<void> {
   await db

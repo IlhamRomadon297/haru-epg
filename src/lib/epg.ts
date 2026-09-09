@@ -1,7 +1,7 @@
 import { CHANNELS, byFeatured, getChannel } from './channels';
 import { getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
-import { readDayFromD1, writeDayToD1, type D1Db } from './store';
+import { readChannelFromD1, readDayFromD1, writeDayToD1, type D1Db } from './store';
 import { fetchAllPrograms, mergePrograms } from './sync';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
@@ -198,14 +198,35 @@ export async function getChannelSchedule(
   if (!ch) return null;
   const date = dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO) ? dateISO : todayWIB();
 
-  // Coba ambil dari cache harian dulu (hemat scrape)
-  const day = await getDaySchedule(env, date);
-  const found = day.channels.find((c) => c.slug === ch.slug);
-  if (found && found.programs.length > 0) {
-    return { channel: { ...found, name: ch.name, description: ch.description }, date, label: day.label };
+  // 1) Baca SATU row D1 untuk channel+tanggal ini saja (ringan, tanpa scrape seluruh hari).
+  if (env.DB) {
+    try {
+      const row = await readChannelFromD1(env.DB as D1Db, ch.slug, date);
+      const ageOk = Date.now() - Date.parse(row?.updatedAt ?? '') < D1_MAX_AGE_MS;
+      if (row && row.programs.length > 0 && (date < todayWIB() || ageOk)) {
+        const nowMs = Date.now();
+        const programs = row.programs.sort((a, b) => a.start.localeCompare(b.start));
+        return {
+          channel: {
+            slug: ch.slug,
+            name: ch.name,
+            category: ch.category,
+            logo: ch.logo,
+            programs,
+            now: programs.find((p) => isLive(nowMs, p)) ?? null,
+            next: programs.find((p) => Date.parse(p.start) > nowMs) ?? null,
+            description: ch.description,
+          },
+          date,
+          label: prettyDate(date),
+        };
+      }
+    } catch {
+      /* jatuh ke provider langsung */
+    }
   }
 
-  // Fallback: scrape langsung 1 channel via providernya (mis. channel baru / cache kosong sebagian)
+  // 2) Fallback: scrape langsung 1 channel via providernya (2-3 subrequest saja).
   let programs: EpgProgram[] = [];
   if (providerRefOf(ch) !== '') {
     try {
