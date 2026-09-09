@@ -161,10 +161,11 @@ async function checkIsAdmin(env: CronEnv, userId: number): Promise<boolean> {
 
 async function registerBotCommands(env: CronEnv): Promise<boolean> {
   const commands = [
+    { command: 'start', description: 'Mulai dan panduan bot EPG' },
     { command: 'list', description: 'Lihat daftar channel EPG' },
     { command: 'add', description: 'Tambah channel (contoh: /add rcti,gtv)' },
     { command: 'remove', description: 'Hapus channel (contoh: /remove rcti)' },
-    { command: 'help', description: 'Panduan penggunaan bot EPG' },
+    { command: 'help', description: 'Panduan bot EPG' },
   ];
   const r1 = await tgFetch(env, 'setMyCommands', { commands });
   const r2 = await tgFetch(env, 'setMyCommands', {
@@ -180,6 +181,7 @@ async function handleCommand(
   replyTo?: number,
   fromId?: number,
   threadId: number = BOT_TOPIC,
+  chatId: number = BOT_CHAT,
 ): Promise<boolean> {
   const [cmdRaw, ...restRaw] = text.split(/\s+/);
   const cmd = cmdRaw.toLowerCase().replace(/@\w+$/, '');
@@ -188,22 +190,44 @@ async function handleCommand(
 
   const reply = async (line: string) => {
     const body: Record<string, unknown> = {
-      chat_id: BOT_CHAT,
-      message_thread_id: threadId,
+      chat_id: chatId,
       text: line,
       parse_mode: 'Markdown',
     };
+    if (chatId === BOT_CHAT) body.message_thread_id = threadId;
     if (replyTo) body.reply_to_message_id = replyTo;
     await tgFetch(env, 'sendMessage', body);
   };
 
-  // Jika dipanggil di luar topik target EPG
-  if (threadId !== BOT_TOPIC) {
-    if (['/list', '/add', '/remove', '/help', '/setmenu'].includes(cmd)) {
-      await reply('⚠️ Bot EPG hanya dapat digunakan di topik khusus EPG.');
+  // Jika dipanggil via Private Chat dengan bot
+  if (chatId !== BOT_CHAT) {
+    if (cmd === '/start' || cmd === '/help') {
+      await reply('👋 Halo! Saya bot *Haru EPG*.\nSaya aktif di grup Haru Releases pada topik *Jadwal TV*. Silakan gunakan bot di topik tersebut ya!');
       return true;
     }
     return false;
+  }
+
+  // Jika dipanggil di luar topik target EPG di dalam grup
+  if (threadId !== BOT_TOPIC) {
+    if (['/start', '/list', '/add', '/remove', '/help', '/setmenu'].includes(cmd)) {
+      await reply('⚠️ Bot EPG hanya dapat digunakan di topik khusus EPG (Jadwal TV).');
+      return true;
+    }
+    return false;
+  }
+
+  if (cmd === '/start' || cmd === '/help') {
+    await reply(
+      '🤖 *Bot Haru EPG*\n\n' +
+        'Bot ini digunakan untuk mengelola channel jadwal TV EPG di topik ini.\n\n' +
+        '• `/list` - Menampilkan channel aktif\n' +
+        '• `/add <slug>` - Menambah channel (contoh: `/add rcti,gtv`)\n' +
+        '• `/remove <slug>` - Menghapus channel (contoh: `/remove rcti`)\n' +
+        '• `/setmenu` - Pasang/perbarui tombol menu bot di grup\n\n' +
+        '💡 _Jadwal harian diposting otomatis setiap jam 00:30 WIB._',
+    );
+    return true;
   }
 
   if (cmd === '/list') {
@@ -245,18 +269,6 @@ async function handleCommand(
     return true;
   }
 
-  if (cmd === '/help') {
-    await reply(
-      '🤖 *Panduan Bot EPG Haru*\n\n' +
-        '• `/list` - Menampilkan channel aktif\n' +
-        '• `/add <slug>` - Menambah channel (Admin)\n' +
-        '• `/remove <slug>` - Menghapus channel (Admin)\n' +
-        '• `/setmenu` - Perbarui menu tombol bot di grup\n\n' +
-        '💡 _Jadwal harian diposting otomatis setiap jam 00:30 WIB._',
-    );
-    return true;
-  }
-
   if (cmd === '/setmenu') {
     if (fromId !== undefined) {
       const isAdmin = await checkIsAdmin(env, fromId);
@@ -276,15 +288,15 @@ async function handleCommand(
 async function handleTelegramUpdate(env: CronEnv, update: Record<string, unknown>): Promise<void> {
   const msg = (update.message ?? update.channel_post) as Record<string, unknown> | undefined;
   if (!msg || typeof msg.text !== 'string') return;
-  if (msg.chat && (msg.chat as { id: number }).id !== BOT_CHAT) return;
 
   const text = (msg.text as string).trim();
   if (!text.startsWith('/')) return;
 
+  const chatId = (msg.chat as { id?: number } | undefined)?.id ?? BOT_CHAT;
   const fromId = (msg.from as { id?: number } | undefined)?.id;
   const threadId = (msg.message_thread_id as number | undefined) ?? BOT_TOPIC;
 
-  await handleCommand(env, text, msg.message_id as number | undefined, fromId, threadId);
+  await handleCommand(env, text, msg.message_id as number | undefined, fromId, threadId, chatId);
 }
 
 export default {
