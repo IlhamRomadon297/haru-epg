@@ -1,4 +1,6 @@
-import { fetchAllPrograms } from '../src/lib/sync';
+import { CHANNELS, type Channel } from '../src/lib/channels';
+import { providerRefOf } from '../src/lib/providers/index';
+import { fetchProgramsForChannels } from '../src/lib/sync';
 import { pruneD1, writeDayToD1, type D1Db } from '../src/lib/store';
 
 interface CronEnv {
@@ -20,8 +22,23 @@ function addDays(dateISO: string, n: number): string {
   return new Date(d.getTime() + (7 * 60 + d.getTimezoneOffset()) * 60000).toISOString().slice(0, 10);
 }
 
-async function syncDate(env: CronEnv, date: string): Promise<{ date: string; count: number }> {
-  const programs = await fetchAllPrograms(env, date);
+/**
+ * Cloudflare Worker membatasi subrequest (~50/invocation). Karena ada ~104 channel,
+ * tiap cron hanya fetch SATU shard (8 channel) agar tidak lewat batas.
+ * Rotasi shard per slot 20 menit → semua channel lengkap dalam ~2,7 jam.
+ */
+const SHARD_SIZE = 8;
+const FETCHABLE = CHANNELS.filter((c) => providerRefOf(c) !== '');
+const SHARDS = Math.ceil(FETCHABLE.length / SHARD_SIZE);
+
+function shardFor(nowMs: number): Channel[] {
+  const slot = Math.floor(nowMs / (20 * 60 * 1000));
+  const i = slot % SHARDS;
+  return FETCHABLE.slice(i * SHARD_SIZE, (i + 1) * SHARD_SIZE);
+}
+
+async function syncShardDate(env: CronEnv, date: string, shard: Channel[]): Promise<{ date: string; count: number }> {
+  const programs = await fetchProgramsForChannels(env, date, shard);
   await writeDayToD1(env.DB, date, programs);
   return { date, count: programs.length };
 }
@@ -30,16 +47,17 @@ async function syncDate(env: CronEnv, date: string): Promise<{ date: string; cou
 const ROTATE_OFFSETS = [-3, -2, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 export default {
-  // Cron tiap jam: hari ini + besok (prioritas kesegaran) + 1 tanggal rotasi
-  // (satu putaran penuh ±24 jam mencakup arsip H-3 s/d depan H+10).
+  // Cron tiap 20 menit: 1 shard channel untuk hari ini + besok + 1 tanggal rotasi.
   async scheduled(_event: unknown, env: CronEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
     ctx.waitUntil(
       (async () => {
+        const nowMs = Date.now();
         const today = todayWIB();
-        await syncDate(env, today);
-        await syncDate(env, addDays(today, 1));
-        const slot = Math.floor(Date.now() / (2 * 3600 * 1000)) % ROTATE_OFFSETS.length;
-        await syncDate(env, addDays(today, ROTATE_OFFSETS[slot]));
+        const shard = shardFor(nowMs);
+        await syncShardDate(env, today, shard);
+        await syncShardDate(env, addDays(today, 1), shard);
+        const slot = Math.floor(nowMs / (2 * 3600 * 1000)) % ROTATE_OFFSETS.length;
+        await syncShardDate(env, addDays(today, ROTATE_OFFSETS[slot]), shard);
         await pruneD1(env.DB, addDays(today, -4), addDays(today, 11));
       })(),
     );
@@ -50,7 +68,7 @@ export default {
     if (url.pathname === '/sync' && env.CRON_KEY && url.searchParams.get('key') === env.CRON_KEY) {
       const date = url.searchParams.get('date') ?? todayWIB();
       try {
-        const r = await syncDate(env, date);
+        const r = await syncShardDate(env, date, FETCHABLE);
         return Response.json({ ok: true, ...r });
       } catch (e) {
         return Response.json({ ok: false, error: String(e) }, { status: 500 });

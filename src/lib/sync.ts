@@ -1,4 +1,4 @@
-import { CHANNELS } from './channels';
+import { CHANNELS, type Channel } from './channels';
 import { fetchProviderSchedules, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
 import type { EpgProgram } from './types';
@@ -20,14 +20,26 @@ export function mergePrograms(
 }
 
 /**
- * Ambil SEMUA program 1 tanggal dari semua provider + sheet.
- * Dipakai oleh cron worker (tulis ke D1) dan fallback live di epg.ts.
+ * Ambil program 1 tanggal dari sekumpulan channel tertentu + sheet.
+ * Dipakai cron (shard partial) dan fetchAllPrograms (semua channel).
  */
-export async function fetchAllPrograms(env: SheetEnv, date: string): Promise<EpgProgram[]> {
-  const fetchable = CHANNELS.filter((c) => providerRefOf(c) !== '');
+export async function fetchProgramsForChannels(
+  env: SheetEnv,
+  date: string,
+  channels: Channel[],
+): Promise<EpgProgram[]> {
+  const fetchable = channels.filter((c) => providerRefOf(c) !== '');
   const [sheet, provMap] = await Promise.all([
     fetchSheetOverrides(env, date),
     fetchProviderSchedules(fetchable, date).catch(() => new Map<string, EpgProgram[]>()),
   ]);
   return mergePrograms([...provMap.values()].flat(), sheet, date);
+}
+
+/**
+ * Ambil SEMUA program 1 tanggal dari semua provider + sheet.
+ * Dipakai oleh fallback live di epg.ts.
+ */
+export async function fetchAllPrograms(env: SheetEnv, date: string): Promise<EpgProgram[]> {
+  return fetchProgramsForChannels(env, date, CHANNELS);
 }

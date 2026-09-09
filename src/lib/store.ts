@@ -64,7 +64,7 @@ export async function pruneD1(db: D1Db, minDate: string, maxDate: string): Promi
     .catch(() => null);
 }
 
-/** Tulis ulang seluruh jadwal 1 tanggal: 1 row per channel, programs sebagai JSON. */
+/** Tulis ulang jadwal 1 tanggal: 1 row per channel, programs sebagai JSON. */
 export async function writeDayToD1(db: D1Db, date: string, programs: EpgProgram[]): Promise<void> {
   const now = new Date().toISOString();
   const byChannel = new Map<string, EpgProgram[]>();
@@ -74,9 +74,7 @@ export async function writeDayToD1(db: D1Db, date: string, programs: EpgProgram[
     byChannel.set(p.channelSlug, list);
   }
 
-  const stmts: { run(): Promise<unknown> }[] = [
-    db.prepare(`DELETE FROM channel_days WHERE date = ?`).bind(date),
-  ];
+  const stmts: { run(): Promise<unknown> }[] = [];
   for (const [slug, list] of byChannel) {
     const first = list[0];
     const channelName = first?.channelName ?? slug;
@@ -105,5 +103,5 @@ export async function writeDayToD1(db: D1Db, date: string, programs: EpgProgram[
         .bind(slug, date, json, now),
     );
   }
-  await db.batch(stmts);
+  if (stmts.length > 0) await db.batch(stmts);
 }

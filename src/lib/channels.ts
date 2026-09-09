@@ -105,8 +105,8 @@ export const CHANNELS: Channel[] = [
   { slug: 'cbeebies', name: 'CBeebies', category: 'paytv', provider: 'mncvision', providerRef: '41', logo: '/logos/cbeebies.png' },
   { slug: 'kids-tv', name: 'Kids TV', category: 'paytv', provider: 'mncvision', providerRef: '46', logo: '/logos/kids-tv.png' },
   { slug: 'moonbug', name: 'Moonbug', category: 'paytv', provider: 'mncvision', providerRef: '40', logo: '/logos/moonbug.png' },
-  { slug: 'nickelodeon', name: 'Nickelodeon', category: 'paytv', provider: 'mncvision', providerRef: '49', logo: '/logos/nickelodeon.png' },
-  { slug: 'nickelodeon-jr', name: 'Nickelodeon Jr', category: 'paytv', provider: 'mncvision', providerRef: '37', logo: '/logos/nickelodeon-jr.png' },
+  { slug: 'nickelodeon', name: 'Nickelodeon', category: 'paytv', provider: 'singtel', providerRef: '5240', logo: '/logos/nickelodeon.png' },
+  { slug: 'nickelodeon-jr', name: 'Nick Jr', category: 'paytv', provider: 'singtel', providerRef: '5238', logo: '/logos/nickelodeon-jr.png' },
   { slug: 'zoomoo', name: 'Zoomoo', category: 'paytv', provider: 'mncvision', providerRef: '39', logo: '/logos/zoomoo.png' },
   // Pay TV — Entertainment
   { slug: 'celebrities-tv', name: 'Celebrities TV', category: 'paytv', provider: 'mncvision', providerRef: '96', logo: '/logos/celebrities-tv.png' },
