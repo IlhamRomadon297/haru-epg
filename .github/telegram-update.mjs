@@ -15,9 +15,7 @@ if (!BOT_TOKEN) {
 }
 
 function todayWIB() {
-  const now = new Date();
-  const wib = new Date(now.getTime() + (7 * 60 + now.getTimezoneOffset()) * 60000);
-  return wib.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date());
 }
 
 function prettyDate(dateISO) {
@@ -44,13 +42,13 @@ function formatTime(iso) {
   return iso?.slice(11, 16) ?? '??:??';
 }
 
-function buildMessages(date, slug, channelName, programs) {
+function buildMessages(date, slug, channelName, programs, withHeader = true) {
   const nowMs = Date.now();
-  const header = `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n`;
+  const header = withHeader ? `<b>📺 ${channelName}</b>\n<i>${prettyDate(date)}</i>\n` : '';
   const footer = `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="https://haru-epg.pages.dev/channel/${slug}">Klik disini</a>`;
 
   if (programs.length === 0) {
-    return [header + '\nJadwal tidak tersedia' + footer];
+    return ['<b>📺 ' + channelName + '</b>\n<i>' + prettyDate(date) + '</i>\n\nJadwal tidak tersedia' + footer];
   }
 
   const programLines = programs.map((p) => {
@@ -129,20 +127,38 @@ async function main() {
       continue;
     }
 
-    const messages = buildMessages(date, slug, ch.name, ch.programs);
+    const base = { chat_id: config.chat_id };
+    if (config.message_thread_id) base.message_thread_id = config.message_thread_id;
+
+    // Kirim logo channel dulu (kalau ada), lalu teks jadwalnya.
+    const logoRoot = ch.logo?.startsWith('http') ? ch.logo : ch.logo ? API_BASE + ch.logo : null;
+    let logoSent = false;
+    if (logoRoot) {
+      try {
+        const head = await fetch(logoRoot, { method: 'HEAD' });
+        logoSent = head.ok;
+      } catch {
+        logoSent = false;
+      }
+    }
+
+    if (logoSent) {
+      const caption = `<b>📺 ${ch.name}</b>\n<i>${prettyDate(date)}</i>\n\n🌐 <a href="https://haru-epg.pages.dev/channel/${slug}">Jadwal Lengkap</a>`;
+      const photoResult = await telegram('sendPhoto', { ...base, photo: logoRoot, caption, parse_mode: 'HTML' });
+      console.log(`  Logo ${photoResult.ok ? 'OK' : 'FAILED'}`);
+      await sleep(1200);
+    }
+
+    const messages = buildMessages(date, slug, ch.name, ch.programs, !logoSent);
     console.log(`  → ${messages.length} message(s), sizes: ${messages.map((m) => m.length).join(', ')}`);
 
     for (let i = 0; i < messages.length; i++) {
       const body = {
-        chat_id: config.chat_id,
+        ...base,
         text: messages[i],
         parse_mode: 'HTML',
         disable_web_page_preview: true,
       };
-
-      if (config.message_thread_id) {
-        body.message_thread_id = config.message_thread_id;
-      }
 
       if (i === 0 && config.reply_to_message_id) {
         body.reply_to_message_id = config.reply_to_message_id;

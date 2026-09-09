@@ -42,6 +42,18 @@ const nowMs = Date.now();
     </div>
   ) : (
     <>
+      {channel.now && (
+        <div class="now-box live" style="margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">
+            Sedang Tayang
+            <span class="live-badge"><span class="live-dot"></span>LIVE</span>
+          </div>
+          <div class="prog-title"><a href={`/program/${channel.now.slug}?date=${date}`}>{channel.now.title}</a></div>
+          <div class="prog-time">{channel.now.startLabel.replace(' WIB','')} – {channel.now.endLabel.replace(' WIB','')}</div>
+          {(() => { const pct = progress(nowMs, channel.now!); return <div class="progress"><div style={`width:${pct.toFixed(1)}%`}></div></div>; })()}
+          {channel.now.description && <div class="t-desc" style="margin-top:4px;-webkit-line-clamp:2">{channel.now.description}</div>}
+        </div>
+      )}
       {channel.next && (
         <div class="now-box" style="margin-bottom:14px">
           <div style="font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase">Berikutnya</div>
