@@ -11,6 +11,33 @@ export interface D1Db {
 
 const str = (v: unknown, fb = ''): string => (v == null ? fb : String(v));
 
+function parseProgramsJson(json: string): EpgProgram[] {
+  const programs: EpgProgram[] = [];
+  try {
+    const arr = JSON.parse(json) as Record<string, unknown>[];
+    for (const p of arr) {
+      programs.push({
+        id: str(p.id),
+        channelSlug: str(p.channelSlug),
+        channelName: str(p.channelName),
+        date: str(p.date),
+        start: str(p.start),
+        end: str(p.end),
+        startLabel: str(p.startLabel),
+        endLabel: str(p.endLabel),
+        title: str(p.title),
+        category: (p.category as string | null) ?? undefined,
+        description: (p.description as string | null) ?? undefined,
+        slug: str(p.slug),
+        manual: Number(p.manual ?? 0) === 1,
+      });
+    }
+  } catch {
+    /* skip corrupt json */
+  }
+  return programs;
+}
+
 export async function readDayFromD1(
   db: D1Db,
   date: string,
@@ -30,26 +57,7 @@ export async function readDayFromD1(
   for (const r of rows) {
     const ts = str(r.updated_at);
     if (ts > updatedAt) updatedAt = ts;
-    try {
-      const arr = JSON.parse(str(r.programs_json, '[]')) as Record<string, unknown>[];
-      for (const p of arr) {
-        programs.push({
-          id: str(p.id),
-          channelSlug: str(p.channelSlug),
-          channelName: str(p.channelName),
-          date: str(p.date),
-          start: str(p.start),
-          end: str(p.end),
-          startLabel: str(p.startLabel),
-          endLabel: str(p.endLabel),
-          title: str(p.title),
-          category: (p.category as string | null) ?? undefined,
-          description: (p.description as string | null) ?? undefined,
-          slug: str(p.slug),
-          manual: Number(p.manual ?? 0) === 1,
-        });
-      }
-    } catch { /* skip corrupt row */ }
+    programs.push(...parseProgramsJson(str(r.programs_json, '[]')));
   }
   if (programs.length === 0) return null;
   return { programs, updatedAt };
@@ -70,31 +78,51 @@ export async function readChannelFromD1(
     .all();
   const row = res.results[0];
   if (!row) return null;
-  const programs: EpgProgram[] = [];
-  try {
-    const arr = JSON.parse(str(row.programs_json, '[]')) as Record<string, unknown>[];
-    for (const p of arr) {
-      programs.push({
-        id: str(p.id),
-        channelSlug: str(p.channelSlug),
-        channelName: str(p.channelName),
-        date: str(p.date),
-        start: str(p.start),
-        end: str(p.end),
-        startLabel: str(p.startLabel),
-        endLabel: str(p.endLabel),
-        title: str(p.title),
-        category: (p.category as string | null) ?? undefined,
-        description: (p.description as string | null) ?? undefined,
-        slug: str(p.slug),
-        manual: Number(p.manual ?? 0) === 1,
-      });
-    }
-  } catch {
-    /* skip corrupt row */
-  }
+  const programs = parseProgramsJson(str(row.programs_json, '[]'));
   if (programs.length === 0) return null;
   return { programs, updatedAt: str(row.updated_at, '1970-01-01T00:00:00.000Z') };
+}
+
+/** Cadangan bila baca seluruh-hari gagal: baca per channel dalam chunk batch 50. */
+export async function readDayFromD1Fallback(
+  db: D1Db,
+  date: string,
+): Promise<{ programs: EpgProgram[]; updatedAt: string } | null> {
+  const slugsRes = await db
+    .prepare(`SELECT DISTINCT channel_slug FROM channel_days WHERE date = ?`)
+    .bind(date)
+    .all();
+  const slugs = slugsRes.results as Record<string, unknown>[];
+  if (slugs.length === 0) return null;
+
+  const reads = slugs.map((s) =>
+    db
+      .prepare(
+        `SELECT channel_slug, date, programs_json, updated_at
+         FROM channel_days WHERE channel_slug = ? AND date = ?`,
+      )
+      .bind(str(s.channel_slug), date),
+  );
+
+  const programs: EpgProgram[] = [];
+  let updatedAt = '1970-01-01T00:00:00.000Z';
+  for (let i = 0; i < reads.length; i += 50) {
+    try {
+      const results = (await db.batch(reads.slice(i, i + 50))) as unknown as {
+        results: Record<string, unknown>[];
+      }[];
+      for (const r of results) {
+        const row = r.results[0];
+        const ts = str(row?.updated_at);
+        if (ts > updatedAt) updatedAt = ts;
+        if (row) programs.push(...parseProgramsJson(str(row.programs_json, '[]')));
+      }
+    } catch {
+      /* lanjut chunk berikut */
+    }
+  }
+  if (programs.length === 0) return null;
+  return { programs, updatedAt };
 }
 
 /** Hapus tanggal di luar jendela retensi (arsip H-4, depan H+11). */

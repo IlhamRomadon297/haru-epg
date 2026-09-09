@@ -1,13 +1,15 @@
 import { CHANNELS, byFeatured, getChannel } from './channels';
 import { getProvider, providerRefOf } from './providers/index';
 import { fetchSheetOverrides, type SheetEnv } from './sheets';
-import { readChannelFromD1, readDayFromD1, writeDayToD1, type D1Db } from './store';
+import { readChannelFromD1, readDayFromD1, readDayFromD1Fallback, writeDayToD1, type D1Db } from './store';
 import { fetchAllPrograms, mergePrograms } from './sync';
 import type { ChannelSchedule, DaySchedule, EpgProgram } from './types';
 
 export const DEFAULT_TTL = 5400; // 1.5 jam
 /** D1 dianggap segar bila ditulis < 12 jam lalu (cron jalan tiap jam). */
 export const D1_MAX_AGE_MS = 6 * 60 * 60 * 1000;  // 6 jam
+/** Hasil live parsial di bawah ambang ini tidak ditulis ke D1 (hindari menimpa data bagus). */
+export const MIN_LIVE_WRITE = 2000;
 
 type Env = SheetEnv & { CACHE_TTL?: string; DB?: unknown };
 
@@ -49,7 +51,7 @@ export function progress(nowMs: number, p: EpgProgram): number {
 const mem = new Map<string, { exp: number; data: DaySchedule }>();
 
 function cacheKey(kind: string, date: string): string {
-  return `https://haru-epg.internal/cache/v8/${kind}/${date}`;
+  return `https://haru-epg.internal/cache/v9/${kind}/${date}`;
 }
 
 function ttlSeconds(env: Env): number {
@@ -65,6 +67,8 @@ async function readCache(key: string): Promise<DaySchedule | null> {
       const hit = await cache.match(key);
       if (hit) {
         const data = (await hit.json()) as DaySchedule;
+        // Tolak hasil kosong/parsial — hanya hasil D1 penuh yang di-cache (lihat getDaySchedule).
+        if (!data || data.totalPrograms <= 0) return null;
         return { ...data, source: 'cache' as const };
       }
       return null;
@@ -162,7 +166,9 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
   //    Aturan kesegaran: tanggal lampau selalu OK (jadwal arsip), hari ini/masa depan < 12 jam.
   if (env.DB) {
     try {
-      const d1 = await readDayFromD1(env.DB as D1Db, date);
+      const db = env.DB as D1Db;
+      let d1 = await readDayFromD1(db, date);
+      if (!d1) d1 = await readDayFromD1Fallback(db, date);
       const ageOk = Date.now() - Date.parse(d1?.updatedAt ?? '') < D1_MAX_AGE_MS;
       if (d1 && d1.programs.length > 0 && (date < todayWIB() || ageOk)) {
         const result = buildDay(date, d1.programs, 'd1');
@@ -174,18 +180,18 @@ export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySch
     }
   }
 
-  // 2) Fallback live: scrape provider + sheet langsung, lalu tulis ke D1 (write-through)
+  // 2) Fallback live: scrape provider + sheet langsung (HASIL INI TIDAK DI-CACHE — hindari
+  //    data parsial meracuni cache; D1 tetap coba lagi di request berikutnya).
   const all = await fetchAllPrograms(env, date);
-  if (env.DB && all.length > 0) {
+  if (env.DB && all.length >= MIN_LIVE_WRITE) {
     try {
       await writeDayToD1(env.DB as D1Db, date, all);
     } catch {
-      /* cache tetap ditulis di bawah */
+      /* abaikan */
     }
   }
   const result = buildDay(date, all, 'live');
 
-  await writeCache(key, result, ttl);
   return result;
 }
 
