@@ -59,6 +59,8 @@ export const CHANNELS: Channel[] = [
   { slug: 'bein-sports-1', name: 'beIN Sports 1', category: 'paytv', provider: 'mncvision', providerRef: '309', logo: '/logos/bein-sports-1.png' },
   { slug: 'bein-sports-2', name: 'beIN Sports 2', category: 'paytv', provider: 'mncvision', providerRef: '310', logo: '/logos/bein-sports-2.png' },
   { slug: 'bein-sports-3', name: 'beIN Sports 3', category: 'paytv', provider: 'mncvision', providerRef: '311', logo: '/logos/bein-sports-3.png' },
+  { slug: 'bein-sports-4', name: 'beIN Sports 4', category: 'paytv', provider: 'mncvision', providerRef: '312', logo: '/logos/bein-sports-4.png' },
+  { slug: 'bein-sports-5', name: 'beIN Sports 5', category: 'paytv', provider: 'mncvision', providerRef: '313', logo: '/logos/bein-sports-5.png' },
   { slug: 'spotv', name: 'SPOTV', category: 'paytv', provider: 'mncvision', providerRef: '307', logo: '/logos/spotv.png' },
   { slug: 'spotv-2', name: 'SPOTV 2', category: 'paytv', provider: 'mncvision', providerRef: '308', logo: '/logos/spotv-2.png' },
   { slug: 'axn', name: 'AXN', category: 'paytv', provider: 'mncvision', providerRef: '154', logo: '/logos/axn.png' },
@@ -120,6 +122,7 @@ export const CHANNELS: Channel[] = [
   { slug: 'superrix', name: 'Superrix', category: 'paytv', provider: 'mncvision', providerRef: '10', logo: '/logos/superrix.png' },
   { slug: 'uniques', name: 'UNIQUES', category: 'paytv', provider: 'mncvision', providerRef: '6', logo: '/logos/uniques.png' },
   { slug: 'vision-prime', name: 'Vision Prime', category: 'paytv', provider: 'mncvision', providerRef: '94', logo: '/logos/vision-prime.png' },
+  { slug: 'food-travel', name: 'FOOD TRAVEL', category: 'paytv', provider: 'mncvision', providerRef: '95', logo: '/logos/food-travel.png' },
   // Pay TV — Sports
   { slug: 'fight-sports', name: 'Fight Sports', category: 'paytv', provider: 'mncvision', providerRef: '304', logo: '/logos/fight-sports.png' },
   { slug: 'soccer-channel', name: 'Soccer Channel', category: 'paytv', provider: 'mncvision', providerRef: '101', logo: '/logos/soccer-channel.png' },

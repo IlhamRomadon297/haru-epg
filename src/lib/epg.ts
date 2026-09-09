@@ -51,7 +51,7 @@ export function progress(nowMs: number, p: EpgProgram): number {
 const mem = new Map<string, { exp: number; data: DaySchedule }>();
 
 function cacheKey(kind: string, date: string): string {
-  return `https://haru-epg.internal/cache/v9/${kind}/${date}`;
+  return `https://haru-epg.internal/cache/v10/${kind}/${date}`;
 }
 
 function ttlSeconds(env: Env): number {
@@ -68,7 +68,9 @@ async function readCache(key: string): Promise<DaySchedule | null> {
       if (hit) {
         const data = (await hit.json()) as DaySchedule;
         // Tolak hasil kosong/parsial — hanya hasil D1 penuh yang di-cache (lihat getDaySchedule).
+        // Bila daftar channel bertambah (channel baru), anggap basi agar dibangun ulang.
         if (!data || data.totalPrograms <= 0) return null;
+        if (data.channels.length < CHANNELS.length) return null;
         return { ...data, source: 'cache' as const };
       }
       return null;
