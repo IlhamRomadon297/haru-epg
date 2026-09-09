@@ -1,10 +1,13 @@
 ---
+import { CHANNELS, categoryLabel } from '../lib/channels';
 interface Props {
   title?: string;
   description?: string;
 }
 const { title = 'Haru EPG | Jadwal TV Indonesia', description = 'Jadwal acara TV nasional, pay TV, dan internasional. Lengkap dengan status LIVE.' } = Astro.props;
 const q = Astro.url.searchParams.get('q') ?? '';
+const channelIndex = CHANNELS.map((c) => ({ slug: c.slug, name: c.name, category: categoryLabel(c.category) }));
+const channelJson = JSON.stringify(channelIndex);
 ---
 <!doctype html>
 <html lang="id">
@@ -82,8 +85,20 @@ const q = Astro.url.searchParams.get('q') ?? '';
       }
       nav.main a:hover, nav.main a.active { background: var(--brand-soft); color: var(--brand); }
       .spacer { flex: 1; }
-      .searchbox { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 6px 6px 14px; }
+      .searchbox { display: flex; align-items: center; gap: 8px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 6px 6px 14px; position: relative; }
       .searchbox input { border: 0; outline: 0; background: transparent; color: var(--text); width: 150px; font-size: 0.88rem; }
+      .ac-dd {
+        position: absolute; top: calc(100% + 8px); left: 0; z-index: 50;
+        min-width: 260px; max-width: min(340px, 92vw); background: var(--surface);
+        border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
+        overflow: hidden; display: none;
+      }
+      .ac-dd.open { display: block; }
+      .ac-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; text-decoration: none; font-size: 0.85rem; font-weight: 700; border-top: 1px solid var(--border); cursor: pointer; }
+      .ac-item:first-child { border-top: 0; }
+      .ac-item.sel { background: var(--brand-soft); color: var(--brand); }
+      .ac-item b { color: var(--brand); }
+      .ac-item small { color: var(--muted); font-weight: 600; font-size: 0.68rem; text-transform: capitalize; white-space: nowrap; }
       .btn {
         border: 1px solid var(--border); background: var(--surface); color: var(--text);
         border-radius: 999px; padding: 8px 14px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
@@ -202,7 +217,7 @@ const q = Astro.url.searchParams.get('q') ?? '';
         <span class="spacer"></span>
         <form class="searchbox" action="/cari" method="get" role="search">
           <span aria-hidden="true">🔍</span>
-          <input name="q" placeholder="Cari acara / channel…" value={q} autocomplete="off" />
+          <input name="q" placeholder="Cari acara / channel…" value={q} data-ac="channel" autocomplete="off" />
           <button class="btn primary" type="submit" style="padding:6px 12px">Cari</button>
         </form>
         <button class="btn theme-btn" id="themeToggle" title="Dark mode" aria-label="Toggle dark mode">🌙</button>
@@ -227,12 +242,13 @@ const q = Astro.url.searchParams.get('q') ?? '';
         <p class="foot-tag">Panduan acara TV Indonesia — nasional, pay TV, dan internasional.</p>
         <div class="src">
           <span class="pill light">📡 tivie.id · 8 channel nasional</span>
-          <span class="pill light">🛰️ MNC Vision · 42 channel nasional, pay TV &amp; internasional</span>
-          <span class="pill light">🌏 Singtel TV · HBO · ANIPLUS · Animax</span>
+          <span class="pill light">🛰️ MNC Vision · 89 channel nasional, pay TV &amp; internasional</span>
+          <span class="pill light">🌏 Singtel TV · 8 channel (HBO, ANIMAX, ANIPLUS, Nickelodeon)</span>
         </div>
         <p class="foot-meta">Diperbarui otomatis setiap jam · <a href="/api/schedule">API JSON</a> · © 2026 Haru EPG</p>
       </div>
     </footer>
+    <script type="application/json" id="haru-channels">{channelJson}</script>
     <script is:inline>
       const btn = document.getElementById('themeToggle');
       const sync = () => { btn.textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙'; };
@@ -242,6 +258,62 @@ const q = Astro.url.searchParams.get('q') ?? '';
         try { localStorage.setItem('haru-theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light'); } catch {}
         sync();
       });
+    </script>
+    <script is:inline>
+      (() => {
+        const el = document.getElementById('haru-channels');
+        if (!el) return;
+        let list = [];
+        try { list = JSON.parse(el.textContent); } catch { return; }
+        const norm = (s) => s.toLowerCase();
+        document.querySelectorAll('[data-ac="channel"]').forEach((input) => {
+          const host = input.closest('.searchbox') || input.closest('form');
+          if (!host || host.__acAttached) return;
+          host.__acAttached = true;
+          const dd = document.createElement('div');
+          dd.className = 'ac-dd';
+          host.appendChild(dd);
+          let sel = -1;
+          const close = () => { dd.innerHTML = ''; dd.classList.remove('open'); sel = -1; input.setAttribute('aria-expanded', 'false'); };
+          const mark = () => { dd.querySelectorAll('.ac-item').forEach((x, i) => x.classList.toggle('sel', i === sel)); };
+          input.addEventListener('input', () => {
+            const q = norm(input.value.trim());
+            if (q.length < 1) { close(); return; }
+            const hits = list
+              .filter((c) => norm(c.name).includes(q) || norm(c.slug).includes(q) || norm(c.category).includes(q))
+              .slice(0, 8);
+            dd.innerHTML = '';
+            if (!hits.length) { close(); return; }
+            hits.forEach((c, i) => {
+              const a = document.createElement('a');
+              a.href = `/channel/${c.slug}`;
+              a.className = 'ac-item';
+              const n = c.name;
+              const idx = norm(n).indexOf(q);
+              a.innerHTML = `<span>${idx >= 0 ? n.slice(0, idx) + '<b>' + n.slice(idx, idx + q.length) + '</b>' + n.slice(idx + q.length) : n}</span><small>${c.category}</small>`;
+              a.addEventListener('mousedown', (e) => { e.preventDefault(); window.location.href = a.href; });
+              dd.appendChild(a);
+            });
+            dd.classList.add('open');
+            input.setAttribute('aria-expanded', 'true');
+            sel = 0; mark();
+          });
+          input.addEventListener('keydown', (e) => {
+            if (!dd.classList.contains('open')) return;
+            const items = dd.querySelectorAll('.ac-item');
+            if (e.key === 'ArrowDown') { e.preventDefault(); sel = (sel + 1) % items.length; mark(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); sel = (sel - 1 + items.length) % items.length; mark(); }
+            else if (e.key === 'Enter' && items.length) {
+              const exact = list.find((c) => norm(c.name) === norm(input.value.trim()));
+              if (sel >= 0) { e.preventDefault(); window.location.href = items[sel].getAttribute('href'); }
+              else if (exact) { e.preventDefault(); window.location.href = `/channel/${exact.slug}`; }
+            }
+            else if (e.key === 'Escape') { close(); }
+          });
+          input.addEventListener('blur', () => setTimeout(close, 120));
+          document.addEventListener('click', (e) => { if (!host.contains(e.target)) close(); });
+        });
+      })();
     </script>
   </body>
 </html>

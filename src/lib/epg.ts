@@ -68,9 +68,9 @@ async function readCache(key: string): Promise<DaySchedule | null> {
       if (hit) {
         const data = (await hit.json()) as DaySchedule;
         // Tolak hasil kosong/parsial — hanya hasil D1 penuh yang di-cache (lihat getDaySchedule).
-        // Bila daftar channel bertambah (channel baru), anggap basi agar dibangun ulang.
+        // Bila daftar channel berubah (ditambah/dihapus), anggap basi agar dibangun ulang.
         if (!data || data.totalPrograms <= 0) return null;
-        if (data.channels.length < CHANNELS.length) return null;
+        if (data.channels.length !== CHANNELS.length) return null;
         return { ...data, source: 'cache' as const };
       }
       return null;

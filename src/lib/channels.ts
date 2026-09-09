@@ -87,7 +87,6 @@ export const CHANNELS: Channel[] = [
   { slug: 'cgtn', name: 'CGTN', category: 'internasional', provider: 'mncvision', providerRef: '353', logo: '/logos/cgtn.png' },
   { slug: 'fox-news', name: 'FOX News', category: 'internasional', provider: 'mncvision', providerRef: '335', logo: '/logos/fox-news.png' },
   { slug: 'nhk-premium', name: 'NHK World Premium', category: 'internasional', provider: 'mncvision', providerRef: '354', logo: '/logos/nhk-premium.png' },
-  { slug: 'sea-today', name: 'SEA TODAY', category: 'internasional', provider: 'mncvision', providerRef: '336', logo: '/logos/sea-today.png' },
   // Nasional tambahan (FTA / terestrial)
   { slug: 'al-quran', name: 'Al Quran Al Kareem', category: 'nasional', provider: 'mncvision', providerRef: '93', logo: '/logos/al-quran.png' },
   { slug: 'hanacaraka-tv', name: 'Hanacaraka TV', category: 'nasional', provider: 'mncvision', providerRef: '90', logo: '/logos/hanacaraka-tv.png' },
@@ -117,7 +116,6 @@ export const CHANNELS: Channel[] = [
   { slug: 'imc', name: 'IMC', category: 'paytv', provider: 'mncvision', providerRef: '14', logo: '/logos/imc.png' },
   { slug: 'life', name: 'LIFE', category: 'paytv', provider: 'mncvision', providerRef: '91', logo: '/logos/life.png' },
   { slug: 'lifetime', name: 'Lifetime', category: 'paytv', provider: 'mncvision', providerRef: '167', logo: '/logos/lifetime.png' },
-  { slug: 'one', name: 'ONE', category: 'paytv', provider: 'mncvision', providerRef: '164', logo: '/logos/one.png' },
   { slug: 'originals', name: 'ORIGINALS', category: 'paytv', provider: 'mncvision', providerRef: '7', logo: '/logos/originals.png' },
   { slug: 'superrix', name: 'Superrix', category: 'paytv', provider: 'mncvision', providerRef: '10', logo: '/logos/superrix.png' },
   { slug: 'uniques', name: 'UNIQUES', category: 'paytv', provider: 'mncvision', providerRef: '6', logo: '/logos/uniques.png' },
@@ -145,8 +143,8 @@ export const CHANNELS: Channel[] = [
 
 export const CATEGORIES: { slug: Category; name: string; description: string }[] = [
   { slug: 'nasional', name: 'TV Nasional', description: 'Jadwal stasiun TV nasional Indonesia (FTA / terestrial).' },
-  { slug: 'paytv', name: 'Pay TV', description: 'Jadwal channel TV berbayar — dikelola manual via Spreadsheet.' },
-  { slug: 'internasional', name: 'Internasional', description: 'Jadwal channel luar negeri — dikelola manual via Spreadsheet.' },
+  { slug: 'paytv', name: 'Pay TV', description: 'Jadwal channel TV berbayar — otomatis dari MNC Vision & Singtel TV.' },
+  { slug: 'internasional', name: 'Internasional', description: 'Jadwal channel luar negeri — otomatis dari MNC Vision.' },
 ];
 
 export function getChannel(slug: string): Channel | undefined {
