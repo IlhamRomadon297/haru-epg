@@ -5,6 +5,12 @@ on:
     # Jam 00:30 WIB = 17:30 UTC (hari sebelumnya)
     - cron: '30 17 * * *'
   workflow_dispatch:
+    inputs:
+      channels:
+        description: 'Slug channel dipisah koma (mis. hbo,nickelodeon). Kosongkan = semua channel.'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   update:
@@ -24,4 +30,5 @@ jobs:
       - name: Send schedule to Telegram
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNELS: ${{ inputs.channels }}
         run: node .github/telegram-update.mjs

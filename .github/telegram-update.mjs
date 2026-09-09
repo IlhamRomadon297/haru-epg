@@ -5,6 +5,11 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const config = JSON.parse(readFileSync(resolve(__dirname, 'telegram-config.json'), 'utf-8'));
 
+const requestedChannels = (process.env.TELEGRAM_CHANNELS ?? '').trim();
+const channels = requestedChannels
+  ? requestedChannels.split(',').map((s) => s.trim()).filter(Boolean)
+  : config.channels;
+
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const API_BASE = 'https://haru-epg.pages.dev';
 const TG_MAX = 4096;
@@ -107,10 +112,10 @@ async function main() {
   const date = todayWIB();
   console.log(`Date: ${date}`);
   console.log(`Chat ID: ${config.chat_id}`);
-  console.log(`Channels: ${config.channels.join(', ')}\n`);
+  console.log(`Channels: ${channels.join(', ')}\n`);
 
   let sent = 0;
-  for (const slug of config.channels) {
+  for (const slug of channels) {
     console.log(`Fetching ${slug}...`);
     const data = await fetchChannel(slug, date);
 
@@ -180,7 +185,7 @@ async function main() {
     await sleep(1500);
   }
 
-  console.log(`\nDone: ${sent}/${config.channels.length} channels sent`);
+  console.log(`\nDone: ${sent}/${channels.length} channels sent`);
 }
 
 main().catch((e) => {
