@@ -152,12 +152,14 @@ function textChunksFromLines(date, slug, channelName, lines, { isContinuation = 
 }
 
 async function telegram(method, body) {
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json();
+  const json = await withRetry(async () => {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }, method);
   if (!json.ok) {
     console.error(`Telegram ${method} failed:`, JSON.stringify(json));
   }
@@ -165,13 +167,15 @@ async function telegram(method, body) {
 }
 
 async function telegramUploadPhoto(base, logoBytes, caption) {
-  const fd = new FormData();
-  fd.append('photo', new Blob([logoBytes], { type: 'image/png' }), 'logo.png');
-  if (caption) fd.append('caption', caption);
-  fd.append('parse_mode', 'HTML');
-  for (const [k, v] of Object.entries(base)) fd.append(k, String(v));
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
-  const json = await res.json();
+  const json = await withRetry(async () => {
+    const fd = new FormData();
+    fd.append('photo', new Blob([logoBytes], { type: 'image/png' }), 'logo.png');
+    if (caption) fd.append('caption', caption);
+    fd.append('parse_mode', 'HTML');
+    for (const [k, v] of Object.entries(base)) fd.append(k, String(v));
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
+    return res.json();
+  }, 'sendPhoto');
   if (!json.ok) {
     console.error(`Telegram sendPhoto failed:`, JSON.stringify(json));
   }
@@ -194,6 +198,23 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Kirim dengan retry bila kena 429 (hormati retry_after dari Telegram).
+async function withRetry(fn, label) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const json = await fn();
+    if (json?.ok) return json;
+    const wait = Number(json?.parameters?.retry_after);
+    if (json?.error_code === 429 && attempt < 3) {
+      const ms = (Number.isFinite(wait) ? wait : 5) * 1000 + 500;
+      console.error(`  429 ${label}, retry dalam ${ms}ms (percobaan ${attempt + 2}/4)`);
+      await sleep(ms);
+      continue;
+    }
+    return json;
+  }
+  return { ok: false };
+}
+
 async function main() {
   const date = todayWIB();
   const channels = await loadChannels();
@@ -202,6 +223,7 @@ async function main() {
   console.log(`Channels: ${channels.join(', ')}\n`);
 
   let sent = 0;
+  let failed = 0;
   for (const slug of channels) {
     console.log(`Fetching ${slug}...`);
     const data = await fetchChannel(slug, date);
@@ -233,7 +255,7 @@ async function main() {
       photoSent = photoResult.ok;
       if (photoSent) rest = r;
       console.log(`  Logo+caption ${photoSent ? 'OK' : 'FAILED'} (${photoSent ? caption.length + ' char caption' : ''})`);
-      await sleep(1200);
+      await sleep(2000);
     }
 
     let messages = [];
@@ -265,16 +287,17 @@ async function main() {
         console.log(`  OK [${i + 1}/${messages.length}] → ${chat?.title ?? '?'} (${chat?.id ?? '?'})`);
       } else {
         console.log(`  FAILED [${i + 1}/${messages.length}]`);
+        failed++;
       }
 
-      if (i < messages.length - 1) await sleep(500);
+      if (i < messages.length - 1) await sleep(1000);
     }
 
     sent++;
-    await sleep(1500);
+    await sleep(2500);
   }
 
-  console.log(`\nDone: ${sent}/${channels.length} channels sent`);
+  console.log(`\nDone: ${sent}/${channels.length} channels, text gagal: ${failed}`);
 }
 
 main().catch((e) => {
