@@ -1,9 +1,8 @@
 name: Telegram EPG Update
 
 on:
-  schedule:
-    # Jam 00:30 WIB = 17:30 UTC (hari sebelumnya)
-    - cron: '30 17 * * *'
+  # Schedule DIMATIKAN — auto-post pindah ke cron worker Cloudflare (00:30 WIB).
+  # Workflow ini cadangan: jalankan manual via workflow_dispatch bila perlu.
   workflow_dispatch:
     inputs:
       channels:

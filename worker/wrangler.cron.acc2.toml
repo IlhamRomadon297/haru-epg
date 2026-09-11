@@ -1,0 +1,18 @@
+# Konfig worker cron untuk AKUN CLOUDFLARE KEDUA.
+# Dipakai dengan token akun-2 dari .env.deploy, contoh:
+#   $env:CLOUDFLARE_API_TOKEN = '...'; $env:CLOUDFLARE_ACCOUNT_ID = '...'
+#   npx wrangler deploy -c worker/wrangler.cron.acc2.toml
+# JANGAN deploy file ini dengan login akun utama.
+name = "haru-epg-cron"
+main = "cron.ts"
+compatibility_date = "2025-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "haru-epg"
+# ISI dengan database_id D1 'haru-epg' yang dibuat di akun kedua
+database_id = "9862584d-76d5-465f-a774-0d8f37ebb897"
+
+[triggers]
+crons = ["*/20 * * * *", "30 17 * * *"]

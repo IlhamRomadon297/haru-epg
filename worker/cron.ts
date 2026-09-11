@@ -52,6 +52,8 @@ const ROTATE_OFFSETS = [-3, -2, -1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 // --- Bot Telegram: kelola daftar channel via command di topic grup ---
 const BOT_CHAT = -1003974729570;
 const BOT_TOPIC = 394;
+// Hanya pemilik ID ini yang boleh memakai command bot (bisa dioverride via env ALLOWED_USER_IDS).
+const OWNER_ID = 1515918048;
 
 const DEFAULT_CHANNELS = [
   'animax',
@@ -123,6 +125,11 @@ async function writeTelegramRow(env: CronEnv, slugs: string[], admins?: number[]
     .run();
 }
 
+function channelListLines(slugs: string[]): string {
+  const bySlug = new Map(CHANNELS.map((c) => [c.slug, c.name]));
+  return slugs.map((s, i) => `${i + 1}. ${bySlug.get(s) ?? s} — \`${s}\``).join('\n');
+}
+
 function channelNames(slugs: string[]): string {
   const bySlug = new Map(CHANNELS.map((c) => [c.slug, c.name]));
   return slugs.map((s) => `${bySlug.get(s) ?? s} (\`${s}\`)`).join(', ') || '(kosong)';
@@ -135,28 +142,16 @@ function splitArgs(text: string): string[] {
     .filter(Boolean);
 }
 
-async function checkIsAdmin(env: CronEnv, userId: number): Promise<boolean> {
+function allowedIds(env: CronEnv): Set<number> {
   if (env.ALLOWED_USER_IDS) {
-    const allowed = new Set(env.ALLOWED_USER_IDS.split(',').map((s) => s.trim()).filter(Boolean).map(Number));
-    if (allowed.has(userId)) return true;
+    return new Set(env.ALLOWED_USER_IDS.split(',').map((s) => s.trim()).filter(Boolean).map(Number));
   }
-  // Verifikasi apakah user adalah admin grup Telegram via getChatMember
-  try {
-    const res = await tgFetch(env, 'getChatMember', { chat_id: BOT_CHAT, user_id: userId });
-    if (res.ok && res.result) {
-      const status = (res.result as { status?: string }).status;
-      if (status === 'creator' || status === 'administrator') return true;
-    }
-  } catch {}
+  return new Set([OWNER_ID]);
+}
 
-  // Fallback: periksa list admin di D1
-  const row = await readTelegramRow(env);
-  if (row?.admins && row.admins.includes(userId)) return true;
-  if (!row?.admins || row.admins.length === 0) {
-    await writeTelegramRow(env, row?.slugs ?? DEFAULT_CHANNELS, [userId]);
-    return true;
-  }
-  return false;
+async function checkIsOwner(env: CronEnv, userId: number): Promise<boolean> {
+  void env;
+  return allowedIds(env).has(userId);
 }
 
 async function registerBotCommands(env: CronEnv): Promise<boolean> {
@@ -217,6 +212,14 @@ async function handleCommand(
     return false;
   }
 
+  // Semua command di topik EPG hanya untuk owner
+  if (['/start', '/help', '/list', '/add', '/remove', '/setmenu'].includes(cmd)) {
+    if (fromId === undefined || !(await checkIsOwner(env, fromId))) {
+      await reply('⛔ Perintah bot hanya untuk owner.');
+      return true;
+    }
+  }
+
   if (cmd === '/start' || cmd === '/help') {
     await reply(
       '🤖 *Bot Haru EPG*\n\n' +
@@ -232,19 +235,11 @@ async function handleCommand(
 
   if (cmd === '/list') {
     const cur = await readTelegramChannels(env);
-    await reply(`📋 *Channel bot (${cur.length}):*\n${channelNames(cur)}\n\n➕ Menambah: \`/add rcti,gtv\`\n➖ Menghapus: \`/remove rcti\``);
+    await reply(`📋 *Channel bot (${cur.length})*\n${channelListLines(cur)}\n\n➕ \`/add rcti,gtv\`\n➖ \`/remove rcti\``);
     return true;
   }
 
   if (cmd === '/add' || cmd === '/remove') {
-    if (fromId !== undefined) {
-      const isAdmin = await checkIsAdmin(env, fromId);
-      if (!isAdmin) {
-        await reply('⛔ Hanya admin grup yang dapat menambah atau menghapus channel.');
-        return true;
-      }
-    }
-
     const slugs = splitArgs(rest);
     if (!slugs.length) {
       await reply(cmd === '/add' ? 'Contoh: `/add rcti,trans7,gtv`' : 'Contoh: `/remove trans7`');
@@ -261,22 +256,15 @@ async function handleCommand(
     }
     await writeTelegramRow(env, next);
     const notes = [
-      `${cmd === '/add' ? '✅ *Ditambah*:' : '🗑️ *Dihapus*:'} ${channelNames(good) || '(tidak ada)'}`,
+      `${cmd === '/add' ? '✅ *Ditambah*' : '🗑️ *Dihapus*'}: ${channelNames(good) || '(tidak ada)'}`,
       bad.length ? `❓ *Tidak dikenal*: ${bad.join(', ')}` : null,
-      `📋 *Daftar kini (${next.length}):*\n${channelNames(next)}`,
+      `📋 *Total kini: ${next.length} channel.* Lihat: /list`,
     ];
     await reply(notes.filter(Boolean).join('\n\n'));
     return true;
   }
 
   if (cmd === '/setmenu') {
-    if (fromId !== undefined) {
-      const isAdmin = await checkIsAdmin(env, fromId);
-      if (!isAdmin) {
-        await reply('⛔ Hanya admin yang dapat mengatur menu bot.');
-        return true;
-      }
-    }
     const ok = await registerBotCommands(env);
     await reply(ok ? '✅ Menu tombol bot berhasil diperbarui di grup!' : '❌ Gagal mendaftarkan menu bot ke Telegram.');
     return true;
@@ -299,13 +287,258 @@ async function handleTelegramUpdate(env: CronEnv, update: Record<string, unknown
   await handleCommand(env, text, msg.message_id as number | undefined, fromId, threadId, chatId);
 }
 
+// --- Auto-post jadwal harian ke Telegram (pengganti GitHub Actions) ---
+// Cron 30 17 (00:30 WIB) memulai run baru; tick */20 berikutnya melanjutkan
+// batch per batch sampai selesai. Progres disimpan di D1 agar tahan interupsi.
+const POST_CRON = '30 17 * * *';
+const POST_BATCH = 8;
+const POST_API_BASE = 'https://haru-epg.pages.dev';
+const POST_TG_MAX = 4096;
+const POST_CAPTION_MAX = 1000;
+
+function postSleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function postWithRetry(
+  fn: () => Promise<{ ok: boolean; error_code?: number; parameters?: { retry_after?: number } }>,
+  label: string,
+): Promise<{ ok: boolean }> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const json = await fn();
+    if (json?.ok) return json;
+    const wait = Number((json as { parameters?: { retry_after?: number } })?.parameters?.retry_after);
+    if ((json as { error_code?: number })?.error_code === 429 && attempt < 3) {
+      await postSleep((Number.isFinite(wait) ? wait : 5) * 1000 + 500);
+      continue;
+    }
+    return json;
+  }
+  return { ok: false };
+}
+
+function postPrettyDate(dateISO: string): string {
+  const d = new Date(`${dateISO}T12:00:00+07:00`);
+  return new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Jakarta',
+  }).format(d);
+}
+
+function postFormatTime(iso: string): string {
+  return iso?.slice(11, 16) ?? '??:??';
+}
+
+function postHtmlLine(p: { start: string; end: string; title: string }): string {
+  return `• <b>${postFormatTime(p.start)} – ${postFormatTime(p.end)}</b> ${p.title}`;
+}
+
+function postHeader(date: string, channelName: string): string {
+  return `<b>📺 ${channelName}</b>\n<i>${postPrettyDate(date)}</i>`;
+}
+
+function postFooter(slug: string): string {
+  return `\n\n🌐 <b>Jadwal Selengkapnya:</b> <a href="${POST_API_BASE}/channel/${slug}">Klik disini</a>`;
+}
+
+function postSplitSchedule(
+  date: string,
+  slug: string,
+  channelName: string,
+  lines: string[],
+): { caption: string; rest: string[] } {
+  const header = postHeader(date, channelName);
+  const footer = postFooter(slug);
+  const full = header + '\n\n' + lines.join('\n') + footer;
+  if (full.length <= POST_CAPTION_MAX) return { caption: full, rest: [] };
+  let current = header + '\n\n';
+  let i = 0;
+  for (; i < lines.length; i++) {
+    const test = current + lines[i] + '\n';
+    if (test.length > POST_CAPTION_MAX - 40) break;
+    current = test;
+  }
+  const ended = i >= lines.length;
+  const caption = (current + (ended ? footer : '\n➡️ <i>lanjut di pesan berikut...</i>')).slice(0, POST_CAPTION_MAX);
+  return { caption, rest: lines.slice(i) };
+}
+
+function postTextChunks(
+  date: string,
+  slug: string,
+  channelName: string,
+  lines: string[],
+  isContinuation: boolean,
+): string[] {
+  if (lines.length === 0) return [];
+  const footer = postFooter(slug);
+  if (isContinuation) {
+    const lead = '<i>Lanjutan jadwal:</i>\n\n';
+    const single = lead + lines.join('\n') + footer;
+    if (single.length <= POST_TG_MAX) return [single];
+    const chunks: string[] = [];
+    let cur = lead;
+    let part = 2;
+    for (const line of lines) {
+      if ((cur + line + '\n' + footer).length > POST_TG_MAX - 30) {
+        cur += `\n➡️ <i>lanjut part ${part}...</i>`;
+        chunks.push(cur.trim());
+        part++;
+        cur = '';
+      }
+      cur += line + '\n';
+    }
+    cur += '\n' + footer;
+    chunks.push(cur.trim());
+    return chunks;
+  }
+  const header = postHeader(date, channelName);
+  const fullText = header + '\n\n' + lines.join('\n') + footer;
+  if (fullText.length <= POST_TG_MAX) return [fullText];
+  const chunks: string[] = [];
+  let cur = header + '\n\n';
+  let part = 1;
+  for (const line of lines) {
+    if ((cur + line + '\n' + footer).length > POST_TG_MAX - 30) {
+      cur += `\n➡️ <i>lanjut part ${part + 1}...</i>`;
+      chunks.push(cur.trim());
+      part++;
+      cur = `<b>📺 ${channelName}</b> (part ${part})\n<i>${postPrettyDate(date)}</i>\n\n`;
+    }
+    cur += line + '\n';
+  }
+  cur += '\n' + footer;
+  chunks.push(cur.trim());
+  return chunks;
+}
+
+async function readPostState(env: CronEnv, date: string): Promise<{ next: number; total: number; done: boolean } | null> {
+  if (!env.DB) return null;
+  const row = await env.DB.prepare('SELECT next_index, total, done FROM bot_post WHERE date = ?1')
+    .bind(date)
+    .first<{ next_index: number; total: number; done: number }>();
+  if (!row) return null;
+  return { next: row.next_index, total: row.total, done: row.done === 1 };
+}
+
+async function writePostState(env: CronEnv, date: string, next: number, total: number, done: boolean): Promise<void> {
+  await env.DB.prepare(
+    'INSERT INTO bot_post (date, next_index, total, done, updated_at) VALUES (?1, ?2, ?3, ?4, ?5) ' +
+      'ON CONFLICT(date) DO UPDATE SET next_index = ?2, total = ?3, done = ?4, updated_at = ?5',
+  )
+    .bind(date, next, total, done ? 1 : 0, new Date().toISOString())
+    .run();
+}
+
+async function postOneChannel(
+  env: CronEnv,
+  date: string,
+  slug: string,
+): Promise<{ ok: boolean; textFailed: number }> {
+  const meta = CHANNELS.find((c) => c.slug === slug);
+  const name = meta?.name ?? slug;
+  const logoUrl = meta?.logo ? POST_API_BASE + meta.logo : null;
+
+  const row = await env.DB.prepare(
+    'SELECT programs_json FROM channel_days WHERE channel_slug = ?1 AND date = ?2',
+  )
+    .bind(slug, date)
+    .first<{ programs_json: string }>();
+  let programs: { start: string; end: string; title: string }[] = [];
+  try {
+    const arr = JSON.parse(row?.programs_json ?? '[]') as { start: string; end: string; title: string }[];
+    if (Array.isArray(arr)) programs = arr;
+  } catch {}
+  if (programs.length === 0) return { ok: false, textFailed: 0 };
+
+  const lines = programs.map(postHtmlLine);
+  const base = { chat_id: BOT_CHAT, message_thread_id: BOT_TOPIC };
+  let textFailed = 0;
+
+  const sendText = async (text: string): Promise<boolean> => {
+    const r = await postWithRetry(
+      () => tgFetch(env, 'sendMessage', { ...base, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+      'sendMessage',
+    );
+    if (!r.ok) textFailed++;
+    return r.ok;
+  };
+
+  if (logoUrl) {
+    const { caption, rest } = postSplitSchedule(date, slug, name, lines);
+    const photo = await postWithRetry(
+      () => tgFetch(env, 'sendPhoto', { ...base, photo: logoUrl, caption, parse_mode: 'HTML' }),
+      'sendPhoto',
+    );
+    if (photo.ok) {
+      await postSleep(2000);
+      const cont = postTextChunks(date, slug, name, rest, true);
+      for (let i = 0; i < cont.length; i++) {
+        await sendText(cont[i]);
+        if (i < cont.length - 1) await postSleep(1000);
+      }
+      return { ok: textFailed === 0, textFailed };
+    }
+  }
+
+  const msgs = postTextChunks(date, slug, name, lines, false);
+  for (let i = 0; i < msgs.length; i++) {
+    await sendText(msgs[i]);
+    if (i < msgs.length - 1) await postSleep(1000);
+  }
+  return { ok: textFailed === 0, textFailed };
+}
+
+async function postNextBatch(
+  env: CronEnv,
+  date: string,
+): Promise<{ posted: number; failed: number; done: boolean; total: number }> {
+  const channels = await readTelegramChannels(env);
+  const st = await readPostState(env, date);
+  const start = st ? st.next : 0;
+  const slice = channels.slice(start, start + POST_BATCH);
+  let posted = 0;
+  let failed = 0;
+  for (const slug of slice) {
+    try {
+      const r = await postOneChannel(env, date, slug);
+      if (r.ok) posted++;
+      else failed++;
+    } catch {
+      failed++;
+    }
+    await writePostState(env, date, start + posted + failed, channels.length, false);
+    await postSleep(2500);
+  }
+  const next = start + posted + failed;
+  const done = next >= channels.length;
+  await writePostState(env, date, next, channels.length, done);
+  return { posted, failed, done, total: channels.length };
+}
+
 export default {
   // Cron tiap 20 menit: 1 shard channel untuk hari ini + besok + 1 tanggal rotasi.
-  async scheduled(_event: unknown, env: CronEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
+  // Cron 30 17 (00:30 WIB): mulai run auto-post; tick */20 berikut melanjutkan batch.
+  async scheduled(event: { cron: string }, env: CronEnv, ctx: { waitUntil(p: Promise<unknown>): void }) {
     ctx.waitUntil(
       (async () => {
-        const nowMs = Date.now();
         const today = todayWIB();
+        if (event?.cron === POST_CRON) {
+          // Run posting baru — tanpa sync di tick ini agar hemat subrequest
+          await writePostState(env, today, 0, 0, false);
+          await postNextBatch(env, today);
+          return;
+        }
+        // Lanjutkan run posting hari ini bila belum selesai (skip sync tick ini)
+        const st = await readPostState(env, today);
+        if (st && !st.done && st.next < st.total) {
+          await postNextBatch(env, today);
+          return;
+        }
+        const nowMs = Date.now();
         const shard = shardFor(nowMs);
         await syncShardDate(env, today, shard);
         await syncShardDate(env, addDays(today, 1), shard);
@@ -337,6 +570,32 @@ export default {
       try {
         const r = await syncShardDate(env, date, channels);
         return Response.json({ ok: true, ...r });
+      } catch (e) {
+        return Response.json({ ok: false, error: String(e) }, { status: 500 });
+      }
+    }
+    // Trigger manual posting (tes): /post?key=...&date=...&start=0&count=2
+    // Tidak menyentuh progres bot_post (terisolasi dari run otomatis).
+    if (url.pathname === '/post' && env.CRON_KEY && url.searchParams.get('key') === env.CRON_KEY) {
+      const date = url.searchParams.get('date') ?? todayWIB();
+      const start = Math.max(0, Number(url.searchParams.get('start') ?? '0') || 0);
+      const count = Math.max(1, Math.min(POST_BATCH, Number(url.searchParams.get('count') ?? String(POST_BATCH)) || POST_BATCH));
+      try {
+        const channels = await readTelegramChannels(env);
+        const slice = channels.slice(start, start + count);
+        let posted = 0;
+        let failed = 0;
+        for (const slug of slice) {
+          try {
+            const r = await postOneChannel(env, date, slug);
+            if (r.ok) posted++;
+            else failed++;
+          } catch {
+            failed++;
+          }
+          await postSleep(2500);
+        }
+        return Response.json({ ok: true, date, posted, failed, total: channels.length });
       } catch (e) {
         return Response.json({ ok: false, error: String(e) }, { status: 500 });
       }

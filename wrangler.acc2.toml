@@ -1,0 +1,22 @@
+# Konfig Pages untuk AKUN CLOUDFLARE KEDUA.
+# Dipakai dengan token akun-2 dari .env.deploy, contoh:
+#   $env:CLOUDFLARE_API_TOKEN = '...'; $env:CLOUDFLARE_ACCOUNT_ID = '...'
+#   npx wrangler pages deploy dist -c wrangler.acc2.toml --project-name haru-epg-2
+# JANGAN deploy file ini dengan login akun utama.
+name = "haru-epg"
+compatibility_date = "2025-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+pages_build_output_dir = "./dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "haru-epg"
+# ISI dengan database_id D1 'haru-epg' yang dibuat di akun kedua
+database_id = "9862584d-76d5-465f-a774-0d8f37ebb897"
+
+[vars]
+CACHE_TTL = "3600"
+
+[observability]
+enabled = true

@@ -7,7 +7,7 @@ pages_build_output_dir = "./dist"
 [[d1_databases]]
 binding = "DB"
 database_name = "haru-epg"
-database_id = "2335eb0a-ea21-4f9f-8a73-3bcfbca5ec91"
+database_id = "9862584d-76d5-465f-a774-0d8f37ebb897"
 
 [vars]
 CACHE_TTL = "3600"
