@@ -415,21 +415,29 @@ function postTextChunks(
   return chunks;
 }
 
-async function readPostState(env: CronEnv, date: string): Promise<{ next: number; total: number; done: boolean } | null> {
+async function readPostState(env: CronEnv, date: string): Promise<{ next: number; total: number; done: boolean; posted: number; failed: number } | null> {
   if (!env.DB) return null;
-  const row = await env.DB.prepare('SELECT next_index, total, done FROM bot_post WHERE date = ?1')
+  const row = await env.DB.prepare('SELECT next_index, total, done, posted, failed FROM bot_post WHERE date = ?1')
     .bind(date)
-    .first<{ next_index: number; total: number; done: number }>();
+    .first<{ next_index: number; total: number; done: number; posted: number; failed: number }>();
   if (!row) return null;
-  return { next: row.next_index, total: row.total, done: row.done === 1 };
+  return { next: row.next_index, total: row.total, done: row.done === 1, posted: row.posted ?? 0, failed: row.failed ?? 0 };
 }
 
-async function writePostState(env: CronEnv, date: string, next: number, total: number, done: boolean): Promise<void> {
+async function writePostState(
+  env: CronEnv,
+  date: string,
+  next: number,
+  total: number,
+  done: boolean,
+  posted = 0,
+  failed = 0,
+): Promise<void> {
   await env.DB.prepare(
-    'INSERT INTO bot_post (date, next_index, total, done, updated_at) VALUES (?1, ?2, ?3, ?4, ?5) ' +
-      'ON CONFLICT(date) DO UPDATE SET next_index = ?2, total = ?3, done = ?4, updated_at = ?5',
+    'INSERT INTO bot_post (date, next_index, total, done, posted, failed, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ' +
+      'ON CONFLICT(date) DO UPDATE SET next_index = ?2, total = ?3, done = ?4, posted = ?5, failed = ?6, updated_at = ?7',
   )
-    .bind(date, next, total, done ? 1 : 0, new Date().toISOString())
+    .bind(date, next, total, done ? 1 : 0, posted, failed, new Date().toISOString())
     .run();
 }
 
@@ -499,9 +507,9 @@ async function postNextBatch(
   const channels = await readTelegramChannels(env);
   const st = await readPostState(env, date);
   const start = st ? st.next : 0;
+  let posted = st ? st.posted : 0;
+  let failed = st ? st.failed : 0;
   const slice = channels.slice(start, start + POST_BATCH);
-  let posted = 0;
-  let failed = 0;
   for (const slug of slice) {
     try {
       const r = await postOneChannel(env, date, slug);
@@ -510,12 +518,24 @@ async function postNextBatch(
     } catch {
       failed++;
     }
-    await writePostState(env, date, start + posted + failed, channels.length, false);
+    await writePostState(env, date, posted + failed, channels.length, false, posted, failed);
     await postSleep(2500);
   }
-  const next = start + posted + failed;
+  const next = posted + failed;
   const done = next >= channels.length;
-  await writePostState(env, date, next, channels.length, done);
+  await writePostState(env, date, next, channels.length, done, posted, failed);
+  if (done) {
+    const extra = failed > 0 ? `, ${failed} gagal` : '';
+    await tgFetch(env, 'sendMessage', {
+      chat_id: BOT_CHAT,
+      message_thread_id: BOT_TOPIC,
+      text:
+        `✅ Jadwal ${postPrettyDate(date)} berhasil terkirim (${posted}/${channels.length} channel${extra})\n\n` +
+        `🌐 Jadwal Selengkapnya: ${POST_API_BASE}`,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
+  }
   return { posted, failed, done, total: channels.length };
 }
 
