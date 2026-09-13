@@ -154,7 +154,8 @@ function buildDay(date: string, all: EpgProgram[], source: DaySchedule['source']
 
 export async function getDaySchedule(env: Env, dateISO?: string): Promise<DaySchedule> {
   const date = dateISO && /^\d{4}-\d{2}-\d{2}$/.test(dateISO) ? dateISO : todayWIB();
-  const ttl = ttlSeconds(env);
+  // Tanggal lampau immutable → cache lama (hemat read D1); hari ini ikut TTL normal.
+  const ttl = date < todayWIB() ? 86400 * 7 : ttlSeconds(env);
   const key = cacheKey('day', date);
 
   const cached = await readCache(key);

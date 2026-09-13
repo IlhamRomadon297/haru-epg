@@ -13,6 +13,7 @@ const cat = (['nasional', 'paytv', 'internasional'].includes(slug ?? '') ? slug 
 const meta = CATEGORIES.find((c) => c.slug === cat)!;
 const dateParam = Astro.url.searchParams.get('date');
 const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayWIB();
+Astro.response.headers.set('Cache-Control', date < todayWIB() ? 'public, max-age=86400' : 'public, max-age=120, stale-while-revalidate=600');
 
 const day = await getDaySchedule(env, date).catch(() => null);
 const list = channelsByCategory(cat);

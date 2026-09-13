@@ -11,6 +11,8 @@ interface CronEnv {
   TELEGRAM_BOT_TOKEN?: string;
   BOT_WEBHOOK_SECRET?: string;
   ALLOWED_USER_IDS?: string;
+  CLOUDFLARE_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
 }
 
 /** WIB YYYY-MM-DD (duplikat kecil agar worker tidak menarik seluruh epg.ts). */
@@ -54,6 +56,9 @@ const BOT_CHAT = -1003974729570;
 const BOT_TOPIC = 394;
 // Hanya pemilik ID ini yang boleh memakai command bot (bisa dioverride via env ALLOWED_USER_IDS).
 const OWNER_ID = 1515918048;
+// Limit gratis D1 per hari (level akun)
+const D1_READ_LIMIT = 5000000;
+const D1_WRITE_LIMIT = 100000;
 
 const DEFAULT_CHANNELS = [
   'animax',
@@ -125,6 +130,60 @@ async function writeTelegramRow(env: CronEnv, slugs: string[], admins?: number[]
     .run();
 }
 
+const DB_NAMES: Record<string, string> = {
+  '9862584d-76d5-465f-a774-0d8f37ebb897': 'haru-epg',
+  '394035de-7e3c-42cc-b312-9b508a86c8c8': 'haru-stream-db',
+  '59fa02c9-3066-4cd4-bb16-094520f771ce': 'harudrive-db',
+};
+
+function fmtNum(n: number): string {
+  return new Intl.NumberFormat('id-ID').format(Math.round(n));
+}
+
+function usageDot(pct: number): string {
+  if (pct >= 90) return '🔴';
+  if (pct >= 70) return '🟡';
+  return '🟢';
+}
+
+async function fetchD1Usage(
+  env: CronEnv,
+): Promise<{ date: string; totalRead: number; totalWrite: number; dbs: { name: string; read: number; write: number }[] } | null> {
+  const token = env.CLOUDFLARE_API_TOKEN?.trim();
+  if (!token) return null;
+  const accountTag = env.CF_ACCOUNT_ID?.trim() || '11b88ee6fb0a7509cabc91b5b5cd64de';
+  const day = new Date().toISOString().slice(0, 10); // hari UTC (reset limit tengah malam UTC)
+  const query =
+    'query($a:String!,$s:Date,$e:Date){viewer{accounts(filter:{accountTag:$a})' +
+    '{d1AnalyticsAdaptiveGroups(limit:100,filter:{date_geq:$s,date_leq:$e},orderBy:[date_DESC])' +
+    '{sum{rowsRead rowsWritten}dimensions{date databaseId}}}}}';
+  try {
+    const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables: { a: accountTag, s: day, e: day } }),
+    });
+    const j = (await res.json()) as {
+      data?: { viewer?: { accounts?: { d1AnalyticsAdaptiveGroups?: { sum?: { rowsRead?: number; rowsWritten?: number }; dimensions?: { date?: string; databaseId?: string } }[] }[] } };
+    };
+    const groups = j?.data?.viewer?.accounts?.[0]?.d1AnalyticsAdaptiveGroups ?? [];
+    const dbs = groups.map((g) => ({
+      name: DB_NAMES[g.dimensions?.databaseId ?? ''] ?? (g.dimensions?.databaseId ?? '?').slice(0, 8),
+      read: Number(g.sum?.rowsRead ?? 0),
+      write: Number(g.sum?.rowsWritten ?? 0),
+    }));
+    dbs.sort((a, b) => b.read - a.read);
+    return {
+      date: day,
+      totalRead: dbs.reduce((a, b) => a + b.read, 0),
+      totalWrite: dbs.reduce((a, b) => a + b.write, 0),
+      dbs,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function channelListLines(slugs: string[]): string {
   const bySlug = new Map(CHANNELS.map((c) => [c.slug, c.name]));
   return slugs.map((s, i) => `${i + 1}. ${bySlug.get(s) ?? s} — \`${s}\``).join('\n');
@@ -160,6 +219,7 @@ async function registerBotCommands(env: CronEnv): Promise<boolean> {
     { command: 'list', description: 'Lihat daftar channel EPG' },
     { command: 'add', description: 'Tambah channel (contoh: /add rcti,gtv)' },
     { command: 'remove', description: 'Hapus channel (contoh: /remove rcti)' },
+    { command: 'status', description: 'Cek usage D1 hari ini' },
     { command: 'help', description: 'Panduan bot EPG' },
   ];
   const r1 = await tgFetch(env, 'setMyCommands', { commands });
@@ -205,7 +265,7 @@ async function handleCommand(
 
   // Jika dipanggil di luar topik target EPG di dalam grup
   if (threadId !== BOT_TOPIC) {
-    if (['/start', '/list', '/add', '/remove', '/help', '/setmenu'].includes(cmd)) {
+    if (['/start', '/list', '/add', '/remove', '/help', '/setmenu', '/status'].includes(cmd)) {
       await reply('⚠️ Bot EPG hanya dapat digunakan di topik khusus EPG (Jadwal TV).');
       return true;
     }
@@ -213,7 +273,7 @@ async function handleCommand(
   }
 
   // Semua command di topik EPG hanya untuk owner
-  if (['/start', '/help', '/list', '/add', '/remove', '/setmenu'].includes(cmd)) {
+  if (['/start', '/help', '/list', '/add', '/remove', '/setmenu', '/status'].includes(cmd)) {
     if (fromId === undefined || !(await checkIsOwner(env, fromId))) {
       await reply('⛔ Perintah bot hanya untuk owner.');
       return true;
@@ -227,6 +287,7 @@ async function handleCommand(
         '• `/list` - Menampilkan channel aktif\n' +
         '• `/add <slug>` - Menambah channel (contoh: `/add rcti,gtv`)\n' +
         '• `/remove <slug>` - Menghapus channel (contoh: `/remove rcti`)\n' +
+        '• `/status` - Cek usage D1 hari ini (reset tengah malam UTC)\n' +
         '• `/setmenu` - Pasang/perbarui tombol menu bot di grup\n\n' +
         '💡 _Jadwal harian diposting otomatis setiap jam 00:30 WIB._',
     );
@@ -267,6 +328,29 @@ async function handleCommand(
   if (cmd === '/setmenu') {
     const ok = await registerBotCommands(env);
     await reply(ok ? '✅ Menu tombol bot berhasil diperbarui di grup!' : '❌ Gagal mendaftarkan menu bot ke Telegram.');
+    return true;
+  }
+
+  if (cmd === '/status') {
+    const u = await fetchD1Usage(env);
+    if (!u) {
+      await reply(
+        env.CLOUDFLARE_API_TOKEN
+          ? '❌ Gagal mengambil data usage D1.'
+          : '❌ Token Cloudflare belum dipasang. Tambahkan secret `CLOUDFLARE_API_TOKEN` di worker dulu.',
+      );
+      return true;
+    }
+    const rp = (u.totalRead / D1_READ_LIMIT) * 100;
+    const wp = (u.totalWrite / D1_WRITE_LIMIT) * 100;
+    const lines = [
+      `📊 *D1 Usage ${u.date} (UTC)*`,
+      `${usageDot(rp)} Read: ${fmtNum(u.totalRead)} / ${fmtNum(D1_READ_LIMIT)} (${rp.toFixed(1)}%)`,
+      `${usageDot(wp)} Write: ${fmtNum(u.totalWrite)} / ${fmtNum(D1_WRITE_LIMIT)} (${wp.toFixed(1)}%)`,
+      '',
+      ...u.dbs.map((d) => `• ${d.name}: ${fmtNum(d.read)} read / ${fmtNum(d.write)} write`),
+    ];
+    await reply(lines.join('\n'));
     return true;
   }
 

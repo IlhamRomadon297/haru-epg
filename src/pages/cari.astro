@@ -10,6 +10,7 @@ const env = (Astro.locals as unknown as { runtime?: { env?: Record<string, strin
 const q = (Astro.url.searchParams.get('q') ?? '').trim();
 const dateParam = Astro.url.searchParams.get('date');
 const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayWIB();
+Astro.response.headers.set('Cache-Control', date < todayWIB() ? 'public, max-age=86400' : 'public, max-age=300, stale-while-revalidate=600');
 
 type Progs = Awaited<ReturnType<typeof getDaySchedule>>['channels'][number]['programs'];
 let results: Progs = [];

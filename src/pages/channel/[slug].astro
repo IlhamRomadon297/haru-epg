@@ -10,6 +10,7 @@ const env = (Astro.locals as unknown as { runtime?: { env?: Record<string, strin
 const { slug } = Astro.params;
 const dateParam = Astro.url.searchParams.get('date');
 const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayWIB();
+Astro.response.headers.set('Cache-Control', date < todayWIB() ? 'public, max-age=86400' : 'public, max-age=120, stale-while-revalidate=600');
 
 const result = await getChannelSchedule(env, slug ?? '', date);
 if (!result) {

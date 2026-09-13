@@ -10,6 +10,8 @@ const env = (Astro.locals as unknown as { runtime?: { env?: Record<string, strin
 const dateParam = Astro.url.searchParams.get('date');
 const catParam = Astro.url.searchParams.get('kategori');
 const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayWIB();
+// Hemat read D1: arsip immutable di-cache edge 1 hari; hari ini 2 menit + SWR.
+Astro.response.headers.set('Cache-Control', date < todayWIB() ? 'public, max-age=86400' : 'public, max-age=120, stale-while-revalidate=600');
 
 let day;
 try {
