@@ -13,6 +13,7 @@ interface CronEnv {
   ALLOWED_USER_IDS?: string;
   CLOUDFLARE_API_TOKEN?: string;
   CF_ACCOUNT_ID?: string;
+  BOT_USERNAME?: string;
 }
 
 /** WIB YYYY-MM-DD (duplikat kecil agar worker tidak menarik seluruh epg.ts). */
@@ -56,6 +57,19 @@ const BOT_CHAT = -1003974729570;
 const BOT_TOPIC = 394;
 // Hanya pemilik ID ini yang boleh memakai command bot (bisa dioverride via env ALLOWED_USER_IDS).
 const OWNER_ID = 1515918048;
+// Perintah resmi milik bot EPG — di luar topik EPG, selain ini selalu silent.
+const EPG_COMMANDS = ['/start', '/help', '/list', '/add', '/remove', '/setmenu', '/status'];
+
+function botUsername(env: CronEnv): string {
+  return (env.BOT_USERNAME?.trim().toLowerCase() || 'haruepgbot').replace(/^@/, '');
+}
+
+// Parse "/cmd" atau "/cmd@target" di awal pesan.
+function parseSlashCommand(text: string): { cmd: string; target: string | null } | null {
+  const m = text.match(/^\/([A-Za-z0-9_]+)(?:@([A-Za-z0-9_]+))?/);
+  if (!m) return null;
+  return { cmd: `/${m[1].toLowerCase()}`, target: m[2] ? m[2].toLowerCase() : null };
+}
 // Limit gratis D1 per hari (level akun)
 const D1_READ_LIMIT = 5000000;
 const D1_WRITE_LIMIT = 100000;
@@ -235,12 +249,15 @@ async function handleCommand(
   text: string,
   replyTo?: number,
   fromId?: number,
-  threadId: number = BOT_TOPIC,
+  threadId?: number,
   chatId: number = BOT_CHAT,
 ): Promise<boolean> {
-  const [cmdRaw, ...restRaw] = text.split(/\s+/);
-  const cmd = cmdRaw.toLowerCase().replace(/@\w+$/, '');
-  const rest = restRaw.join(' ').trim();
+  const parsed = parseSlashCommand(text);
+  if (!parsed) return false;
+  const { cmd, target } = parsed;
+  // Perintah yang jelas ditujukan ke bot lain → diam total, di mana pun.
+  if (target && target !== botUsername(env)) return false;
+  const rest = text.split(/\s+/).slice(1).join(' ').trim();
   const known = new Set(CHANNELS.map((c) => c.slug));
 
   const reply = async (line: string) => {
@@ -249,7 +266,7 @@ async function handleCommand(
       text: line,
       parse_mode: 'Markdown',
     };
-    if (chatId === BOT_CHAT) body.message_thread_id = threadId;
+    if (chatId === BOT_CHAT && threadId !== undefined) body.message_thread_id = threadId;
     if (replyTo) body.reply_to_message_id = replyTo;
     await tgFetch(env, 'sendMessage', body);
   };
@@ -263,17 +280,14 @@ async function handleCommand(
     return false;
   }
 
-  // Jika dipanggil di luar topik target EPG di dalam grup
+  // DI LUAR TOPIK EPG: selalu silent total — tanpa teguran apa pun,
+  // agar tidak nyampah di topik lain (termasuk General yang tidak punya thread id).
   if (threadId !== BOT_TOPIC) {
-    if (['/start', '/list', '/add', '/remove', '/help', '/setmenu', '/status'].includes(cmd)) {
-      await reply('⚠️ Bot EPG hanya dapat digunakan di topik khusus EPG (Jadwal TV).');
-      return true;
-    }
     return false;
   }
 
   // Semua command di topik EPG hanya untuk owner
-  if (['/start', '/help', '/list', '/add', '/remove', '/setmenu', '/status'].includes(cmd)) {
+  if (EPG_COMMANDS.includes(cmd)) {
     if (fromId === undefined || !(await checkIsOwner(env, fromId))) {
       await reply('⛔ Perintah bot hanya untuk owner.');
       return true;
@@ -366,7 +380,8 @@ async function handleTelegramUpdate(env: CronEnv, update: Record<string, unknown
 
   const chatId = (msg.chat as { id?: number } | undefined)?.id ?? BOT_CHAT;
   const fromId = (msg.from as { id?: number } | undefined)?.id;
-  const threadId = (msg.message_thread_id as number | undefined) ?? BOT_TOPIC;
+  // General (tanpa message_thread_id) BUKAN topik kita → jangan default ke BOT_TOPIC.
+  const threadId = msg.message_thread_id as number | undefined;
 
   await handleCommand(env, text, msg.message_id as number | undefined, fromId, threadId, chatId);
 }
@@ -499,13 +514,13 @@ function postTextChunks(
   return chunks;
 }
 
-async function readPostState(env: CronEnv, date: string): Promise<{ next: number; total: number; done: boolean; posted: number; failed: number } | null> {
+async function readPostState(env: CronEnv, date: string): Promise<{ next: number; total: number; done: boolean; posted: number; failed: number; pin: number } | null> {
   if (!env.DB) return null;
-  const row = await env.DB.prepare('SELECT next_index, total, done, posted, failed FROM bot_post WHERE date = ?1')
+  const row = await env.DB.prepare('SELECT next_index, total, done, posted, failed, pin_msg_id FROM bot_post WHERE date = ?1')
     .bind(date)
-    .first<{ next_index: number; total: number; done: number; posted: number; failed: number }>();
+    .first<{ next_index: number; total: number; done: number; posted: number; failed: number; pin_msg_id: number }>();
   if (!row) return null;
-  return { next: row.next_index, total: row.total, done: row.done === 1, posted: row.posted ?? 0, failed: row.failed ?? 0 };
+  return { next: row.next_index, total: row.total, done: row.done === 1, posted: row.posted ?? 0, failed: row.failed ?? 0, pin: row.pin_msg_id ?? 0 };
 }
 
 async function writePostState(
@@ -516,12 +531,18 @@ async function writePostState(
   done: boolean,
   posted = 0,
   failed = 0,
+  pin?: number,
 ): Promise<void> {
+  let nextPin = pin;
+  if (nextPin === undefined) {
+    const row = await readPostState(env, date);
+    nextPin = row?.pin ?? 0;
+  }
   await env.DB.prepare(
-    'INSERT INTO bot_post (date, next_index, total, done, posted, failed, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ' +
-      'ON CONFLICT(date) DO UPDATE SET next_index = ?2, total = ?3, done = ?4, posted = ?5, failed = ?6, updated_at = ?7',
+    'INSERT INTO bot_post (date, next_index, total, done, posted, failed, pin_msg_id, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ' +
+      'ON CONFLICT(date) DO UPDATE SET next_index = ?2, total = ?3, done = ?4, posted = ?5, failed = ?6, pin_msg_id = ?7, updated_at = ?8',
   )
-    .bind(date, next, total, done ? 1 : 0, posted, failed, new Date().toISOString())
+    .bind(date, next, total, done ? 1 : 0, posted, failed, nextPin, new Date().toISOString())
     .run();
 }
 
@@ -584,6 +605,36 @@ async function postOneChannel(
   return { ok: textFailed === 0, textFailed };
 }
 
+async function sendOpeningPost(env: CronEnv, date: string, channels: string[]): Promise<void> {
+  const bySlug = new Map(CHANNELS.map((c) => [c.slug, c.name]));
+  const list = channels.map((s, i) => `${i + 1}. ${bySlug.get(s) ?? s}`).join('\n');
+  const text = `📺 *Jadwal TV Hari Ini (${postPrettyDate(date)})*\n\nChannel yang akan dikirim:\n${list}`;
+  // Lepas pin kemarin (best-effort) agar hanya pesan ini yang ter-pin
+  try {
+    const y = await readPostState(env, addDays(date, -1));
+    if (y?.pin) await tgFetch(env, 'unpinChatMessage', { chat_id: BOT_CHAT, message_id: y.pin });
+  } catch {}
+  const sent = await postWithRetry(
+    () =>
+      tgFetch(env, 'sendMessage', {
+        chat_id: BOT_CHAT,
+        message_thread_id: BOT_TOPIC,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    'sendMessage',
+  );
+  const msgId = (sent.result as { message_id?: number } | undefined)?.message_id;
+  if (msgId) {
+    try {
+      await tgFetch(env, 'pinChatMessage', { chat_id: BOT_CHAT, message_id: msgId, disable_notification: true });
+    } catch {}
+    const st = await readPostState(env, date);
+    await writePostState(env, date, st?.next ?? 0, channels.length, false, st?.posted ?? 0, st?.failed ?? 0, msgId);
+  }
+}
+
 async function postNextBatch(
   env: CronEnv,
   date: string,
@@ -593,6 +644,9 @@ async function postNextBatch(
   const start = st ? st.next : 0;
   let posted = st ? st.posted : 0;
   let failed = st ? st.failed : 0;
+  if (start === 0) {
+    await sendOpeningPost(env, date, channels);
+  }
   const slice = channels.slice(start, start + POST_BATCH);
   for (const slug of slice) {
     try {
